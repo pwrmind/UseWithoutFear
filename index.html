@@ -3,59 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Стиральная машина — симулятор (исправлен v2)</title>
+  <title>Стиральная машина — симулятор (стабильная версия)</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #e8ecf1;
-      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-      padding: 20px;
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      background:#e8ecf1;
+      font-family:system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      padding:20px;
     }
     .app-header {
-      margin-bottom: 20px;
-      text-align: center;
-      color: #2c3e50;
+      margin-bottom:20px;
+      text-align:center;
+      color:#2c3e50;
     }
     .app-header h1 {
-      font-weight: 400;
-      font-size: 1.6rem;
-      letter-spacing: 0.5px;
+      font-weight:400;
+      font-size:1.6rem;
+      letter-spacing:0.5px;
     }
     .app-header p {
-      font-size: 0.9rem;
-      color: #6c7a8a;
+      font-size:0.9rem;
+      color:#6c7a8a;
     }
     .status-badge {
-      display: inline-block;
-      background: #1e293b;
-      color: #94a3b8;
-      padding: 4px 16px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      margin-top: 6px;
+      display:inline-block;
+      background:#1e293b;
+      color:#94a3b8;
+      padding:4px 16px;
+      border-radius:20px;
+      font-size:0.8rem;
+      margin-top:6px;
     }
     .neo-card {
-      background: #f0f3f7;
-      border-radius: 32px;
-      box-shadow: 12px 12px 24px rgba(160, 180, 200, 0.4),
-                  -12px -12px 24px rgba(255, 255, 255, 0.8);
-      padding: 20px;
-      max-width: 420px;
-      width: 100%;
-      transition: box-shadow 0.2s;
+      background:#f0f3f7;
+      border-radius:32px;
+      box-shadow:12px 12px 24px rgba(160,180,200,0.4), -12px -12px 24px rgba(255,255,255,0.8);
+      padding:20px;
+      max-width:420px;
+      width:100%;
+      transition:box-shadow 0.2s;
     }
-    @media (max-width: 480px) {
-      .neo-card { padding: 12px; }
-      .app-header h1 { font-size: 1.3rem; }
+    @media (max-width:480px) {
+      .neo-card { padding:12px; }
+      .app-header h1 { font-size:1.3rem; }
     }
   </style>
 </head>
@@ -70,14 +65,14 @@
 <div class="neo-card" id="app-container">
   <app-appliance type="washer" id="washer">
     <!-- Панель управления -->
-    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px 4px; gap: 6px; flex-wrap: wrap;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 4px 16px 4px; gap:6px; flex-wrap:wrap;">
       <app-rotary-knob></app-rotary-knob>
       <app-digital-display></app-digital-display>
       <app-button-start></app-button-start>
     </div>
 
     <!-- Зона люка: дверца + барабан -->
-    <div style="position: relative; height: 200px; display: flex; justify-content: center; align-items: center; margin: 4px 0;">
+    <div style="position:relative; height:200px; display:flex; justify-content:center; align-items:center; margin:4px 0;">
       <app-door></app-door>
       <app-drum-tank id="drum"></app-drum-tank>
     </div>
@@ -94,49 +89,33 @@
   const applianceTemplate = document.createElement('template');
   applianceTemplate.innerHTML = `
     <style>
-      :host {
-        display: block;
-        width: 100%;
-        font-family: system-ui, sans-serif;
-      }
+      :host { display:block; width:100%; font-family:system-ui, sans-serif; }
       .housing {
-        background: #f0f3f7;
-        border-radius: 28px;
-        padding: 16px 16px 6px 16px;
-        box-shadow: inset 0 2px 6px rgba(0,0,0,0.02),
-                    8px 8px 16px rgba(160,180,200,0.4),
-                    -8px -8px 16px rgba(255,255,255,0.8);
-        transition: box-shadow 0.2s, transform 0.1s;
-        box-sizing: border-box;
+        background:#f0f3f7;
+        border-radius:28px;
+        padding:16px 16px 6px 16px;
+        box-shadow:inset 0 2px 6px rgba(0,0,0,0.02), 8px 8px 16px rgba(160,180,200,0.4), -8px -8px 16px rgba(255,255,255,0.8);
+        transition:box-shadow 0.2s, transform 0.1s;
+        box-sizing:border-box;
       }
-      .housing.shake {
-        animation: shake 0.12s infinite linear;
-      }
-      .housing.burn {
-        animation: flashBurn 0.6s ease-out;
-      }
+      .housing.shake { animation:shake 0.12s infinite linear; }
+      .housing.burn { animation:flashBurn 0.6s ease-out; }
       @keyframes shake {
-        0% { transform: translate(0,0) rotate(0deg); }
-        25% { transform: translate(-3px,2px) rotate(-0.5deg); }
-        50% { transform: translate(3px,-1px) rotate(0.5deg); }
-        75% { transform: translate(-2px,-2px) rotate(0deg); }
-        100% { transform: translate(2px,1px) rotate(-0.5deg); }
+        0% { transform:translate(0,0) rotate(0deg); }
+        25% { transform:translate(-3px,2px) rotate(-0.5deg); }
+        50% { transform:translate(3px,-1px) rotate(0.5deg); }
+        75% { transform:translate(-2px,-2px) rotate(0deg); }
+        100% { transform:translate(2px,1px) rotate(-0.5deg); }
       }
       @keyframes flashBurn {
-        0% { background-color: #f0f3f7; filter: brightness(1); }
-        20% { background-color: #ff6b6b; filter: brightness(1.8); }
-        100% { background-color: #2d2f33; filter: brightness(0.3); }
+        0% { background-color:#f0f3f7; filter:brightness(1); }
+        20% { background-color:#ff6b6b; filter:brightness(1.8); }
+        100% { background-color:#2d2f33; filter:brightness(0.3); }
       }
-      .slot-wrapper {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
+      .slot-wrapper { display:flex; flex-direction:column; gap:6px; }
     </style>
     <div class="housing" id="housing">
-      <div class="slot-wrapper">
-        <slot></slot>
-      </div>
+      <div class="slot-wrapper"><slot></slot></div>
     </div>
   `;
 
@@ -147,20 +126,19 @@
       this.shadowRoot.appendChild(applianceTemplate.content.cloneNode(true));
       this.housing = this.shadowRoot.getElementById('housing');
 
-      // Управление таймером цикла
       this.cycleTimerId = null;
-      this.cycleRemaining = 5000; // мс
+      this.cycleRemaining = 5000;
       this.cycleStartTime = 0;
 
       this.state = {
         power: 'off',
         currentProgram: 'none',
-        cycleStatus: 'stopped', // stopped, running, paused, error
+        cycleStatus: 'stopped',
         activeError: null,
         isClogged: true,
         loadedItems: [],
         isDoorOpen: true,
-        boltsRemoved: false,
+        previewProgram: null,  // для предпросмотра на дисплее
       };
 
       this.handleChildAction = this.handleChildAction.bind(this);
@@ -241,14 +219,13 @@
 
       switch (actionType) {
         case 'program-preview': {
-          // Ничего не меняем в состоянии, только пробрасываем для дисплея
-          // (дисплей сам подписан на preview-program-display)
+          // Просто сохраняем ID для дисплея, не меняя основное состояние
+          this.updateState({ previewProgram: detail.programId });
           break;
         }
 
         case 'program-selected': {
           const progId = detail.programId;
-          // Если машина работает или на паузе, смена программы останавливает цикл
           if (this.state.cycleStatus === 'running' || this.state.cycleStatus === 'paused') {
             this.clearCycleTimer();
             this.updateState({
@@ -256,7 +233,8 @@
               activeError: null,
               power: progId === 'off' ? 'off' : 'on',
               currentProgram: progId,
-              isDoorOpen: false // закрываем дверцу принудительно
+              isDoorOpen: false,
+              previewProgram: null,
             });
             alert('⚠️ Программа изменена во время работы. Цикл остановлен.');
             return;
@@ -266,14 +244,14 @@
             currentProgram: progId,
             power: power,
             activeError: (progId === 'off') ? null : this.state.activeError,
-            cycleStatus: (progId === 'off') ? 'stopped' : this.state.cycleStatus
+            cycleStatus: (progId === 'off') ? 'stopped' : this.state.cycleStatus,
+            previewProgram: null,
           });
           break;
         }
 
         case 'simulation-started': {
           if (this.state.cycleStatus === 'paused') {
-            // Продолжение после паузы
             this.updateState({ cycleStatus: 'running' });
             this.startCycleTimer(this.cycleRemaining);
             return;
@@ -315,13 +293,13 @@
         }
 
         case 'filter-cleaned': {
-          // Полный сброс ошибки и возврат к исходному состоянию
           this.updateState({
             isClogged: false,
             activeError: null,
             cycleStatus: 'stopped',
             power: 'off',
-            currentProgram: 'none'
+            currentProgram: 'none',
+            previewProgram: null,
           });
           alert('✅ Фильтр очищен! Ошибка сброшена. Теперь можно запускать стирку.');
           break;
@@ -333,7 +311,6 @@
 
     async validateStart() {
       const state = this.state;
-      // Проверка открытой дверцы
       if (state.isDoorOpen) {
         return {
           success: false,
@@ -341,7 +318,6 @@
           message: '🚪 Дверца открыта! Закройте люк перед запуском.'
         };
       }
-      // Проверка засора фильтра (теперь для любой программы, кроме off)
       if (state.isClogged && state.currentProgram !== 'off' && state.currentProgram !== 'none') {
         return {
           success: false,
@@ -350,7 +326,6 @@
           message: '🚨 Ошибка E18! Вода не сливается. Засор фильтра насоса. Откройте нижний люк и проверьте фильтр.'
         };
       }
-      // Дополнительно: нет загруженного белья
       if (state.loadedItems.length === 0) {
         return {
           success: false,
@@ -382,63 +357,60 @@
   knobTemplate.innerHTML = `
     <style>
       :host {
-        display: inline-block;
-        width: 80px;
-        height: 80px;
-        user-select: none;
-        touch-action: none;
+        display:inline-block;
+        width:80px;
+        height:80px;
+        user-select:none;
+        touch-action:none;
       }
       :host(.disabled) .knob-body {
-        pointer-events: none;
-        opacity: 0.6;
-        cursor: not-allowed;
+        pointer-events:none;
+        opacity:0.6;
+        cursor:not-allowed;
       }
       .knob-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position:relative;
+        width:100%;
+        height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
       }
       .knob-body {
-        width: 85%;
-        height: 85%;
-        border-radius: 50%;
-        background: linear-gradient(145deg, #ffffff, #d9dce3);
-        box-shadow: 6px 6px 12px rgba(160,180,200,0.5),
-                    -6px -6px 12px rgba(255,255,255,0.9),
-                    inset 1px 1px 2px rgba(255,255,255,0.6);
-        cursor: grab;
-        position: relative;
-        transition: box-shadow 0.15s, transform 0.05s;
-        border: 1px solid rgba(255,255,255,0.3);
+        width:85%;
+        height:85%;
+        border-radius:50%;
+        background:linear-gradient(145deg,#ffffff,#d9dce3);
+        box-shadow:6px 6px 12px rgba(160,180,200,0.5), -6px -6px 12px rgba(255,255,255,0.9), inset 1px 1px 2px rgba(255,255,255,0.6);
+        cursor:grab;
+        position:relative;
+        transition:box-shadow 0.15s, transform 0.05s;
+        border:1px solid rgba(255,255,255,0.3);
       }
       .knob-body:active {
-        cursor: grabbing;
-        box-shadow: 2px 2px 6px rgba(160,180,200,0.5),
-                    -2px -2px 6px rgba(255,255,255,0.9);
+        cursor:grabbing;
+        box-shadow:2px 2px 6px rgba(160,180,200,0.5), -2px -2px 6px rgba(255,255,255,0.9);
       }
       .pointer {
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        width: 4px;
-        height: 16px;
-        background: #2c3e50;
-        border-radius: 2px;
-        transform: translateX(-50%);
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        position:absolute;
+        top:8px;
+        left:50%;
+        width:4px;
+        height:16px;
+        background:#2c3e50;
+        border-radius:2px;
+        transform:translateX(-50%);
+        box-shadow:0 1px 3px rgba(0,0,0,0.2);
       }
-      .knob-body .ring {
-        position: absolute;
-        top: 6px;
-        left: 6px;
-        right: 6px;
-        bottom: 6px;
-        border-radius: 50%;
-        border: 1px solid rgba(255,255,255,0.5);
-        pointer-events: none;
+      .ring {
+        position:absolute;
+        top:6px;
+        left:6px;
+        right:6px;
+        bottom:6px;
+        border-radius:50%;
+        border:1px solid rgba(255,255,255,0.5);
+        pointer-events:none;
       }
     </style>
     <div class="knob-container">
@@ -456,12 +428,12 @@
       this.shadowRoot.appendChild(knobTemplate.content.cloneNode(true));
 
       this.steps = [
-        { angle: 0,   programId: 'off',        name: 'Выкл' },
-        { angle: 45,  programId: 'cotton_60',  name: 'Хлопок 60°' },
-        { angle: 90,  programId: 'synthetic',  name: 'Синтетика' },
-        { angle: 135, programId: 'wool',       name: 'Шерсть' },
-        { angle: 180, programId: 'spin_only',  name: 'Отжим' },
-        { angle: 225, programId: 'eco_40',     name: 'Эко 40°' }
+        { angle:0,   programId:'off',        name:'Выкл' },
+        { angle:45,  programId:'cotton_60',  name:'Хлопок 60°' },
+        { angle:90,  programId:'synthetic',  name:'Синтетика' },
+        { angle:135, programId:'wool',       name:'Шерсть' },
+        { angle:180, programId:'spin_only',  name:'Отжим' },
+        { angle:225, programId:'eco_40',     name:'Эко 40°' }
       ];
 
       this.currentAngle = 0;
@@ -498,15 +470,11 @@
 
     onApplianceState(e) {
       const state = e.detail;
-      // Блокируем крутилку во время работы или паузы
       if (state.cycleStatus === 'running' || state.cycleStatus === 'paused') {
         this.classList.add('disabled');
       } else {
         this.classList.remove('disabled');
       }
-
-      // Автоматический сброс в положение 'off' при выключении питания,
-      // если программа не off и цикл остановлен
       if (state.power === 'off' && state.cycleStatus === 'stopped' && this.currentStepIndex !== 0) {
         this._silentSnapTo(0);
       }
@@ -565,12 +533,8 @@
       if (closestIndex !== this.currentStepIndex) {
         this.currentStepIndex = closestIndex;
         if (navigator.vibrate) navigator.vibrate(8);
-        // Отправляем preview, не меняя основное состояние
-        this.dispatchEvent(new CustomEvent('preview-program', {
-          detail: { programId: this.steps[closestIndex].programId },
-          bubbles: true,
-          composed: true
-        }));
+        // Отправляем preview через ui-action
+        this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
       }
     }
 
@@ -579,7 +543,6 @@
     }
 
     _silentSnapTo(index) {
-      // Меняем положение крутилки без генерации событий
       const step = this.steps[index];
       this.currentAngle = step.angle;
       this.currentStepIndex = index;
@@ -608,38 +571,41 @@
   displayTemplate.innerHTML = `
     <style>
       :host {
-        display: inline-block;
-        background: #121316;
-        border-radius: 14px;
-        padding: 8px 14px;
-        box-shadow: inset 3px 3px 8px rgba(0,0,0,0.7),
-                    inset -2px -2px 6px rgba(255,255,255,0.05),
-                    1px 1px 2px rgba(255,255,255,0.2);
-        border: 1px solid #2c2d32;
-        min-width: 80px;
-        text-align: center;
+        display:inline-block;
+        background:#121316;
+        border-radius:14px;
+        padding:8px 14px;
+        box-shadow:inset 3px 3px 8px rgba(0,0,0,0.7), inset -2px -2px 6px rgba(255,255,255,0.05), 1px 1px 2px rgba(255,255,255,0.2);
+        border:1px solid #2c2d32;
+        min-width:80px;
+        text-align:center;
       }
       .digits {
-        font-family: 'Courier New', monospace;
-        font-size: 1.8rem;
-        font-weight: 700;
-        letter-spacing: 3px;
-        color: #00f3ff;
-        text-shadow: 0 0 6px rgba(0,243,255,0.6), 0 0 18px rgba(0,243,255,0.2);
-        transition: color 0.2s, text-shadow 0.2s;
+        font-family:'Courier New', monospace;
+        font-size:1.8rem;
+        font-weight:700;
+        letter-spacing:3px;
+        color:#00f3ff;
+        text-shadow:0 0 6px rgba(0,243,255,0.6), 0 0 18px rgba(0,243,255,0.2);
+        transition:color 0.2s, text-shadow 0.2s;
       }
       .digits.off {
-        color: #1c2024;
-        text-shadow: none;
+        color:#1c2024;
+        text-shadow:none;
       }
       .digits.error {
-        color: #ff3b30;
-        text-shadow: 0 0 6px rgba(255,59,48,0.7), 0 0 18px rgba(255,59,48,0.3);
-        animation: blink 1.2s infinite steps(2);
+        color:#ff3b30;
+        text-shadow:0 0 6px rgba(255,59,48,0.7), 0 0 18px rgba(255,59,48,0.3);
+        animation:blink 1.2s infinite steps(2);
+      }
+      .digits.preview {
+        color:#00cca3;
+        text-shadow:0 0 4px rgba(0,204,163,0.4);
+        animation:none;
       }
       @keyframes blink {
-        0% { opacity: 1; }
-        50% { opacity: 0; }
+        0% { opacity:1; }
+        50% { opacity:0; }
       }
     </style>
     <div class="digits off" id="display">OFF</div>
@@ -653,8 +619,7 @@
       this.displayEl = this.shadowRoot.getElementById('display');
       this.parentAppliance = null;
       this.onStateChange = this.onStateChange.bind(this);
-      this.onPreview = this.onPreview.bind(this);
-      this.currentPreview = null;
+      this.onUiAction = this.onUiAction.bind(this);
 
       this.programTimes = {
         'off': 'OFF',
@@ -671,41 +636,47 @@
       this.parentAppliance = this.closest('app-appliance');
       if (this.parentAppliance) {
         this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
-        this.parentAppliance.addEventListener('preview-program-display', this.onPreview);
+        this.parentAppliance.addEventListener('ui-action', this.onUiAction);
         this.render(this.parentAppliance.state);
       }
-      // Ретрансляция preview-программ
-      this.parentAppliance?.addEventListener('preview-program', (e) => {
-        this.onPreview({ detail: e.detail });
-      });
     }
 
     disconnectedCallback() {
       if (this.parentAppliance) {
         this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
-        // Удаляем слушатель preview-program (нужно было сохранить ссылку)
-        // для простоты оставим как есть, но в реальном проекте лучше сохранить обработчик.
+        this.parentAppliance.removeEventListener('ui-action', this.onUiAction);
       }
     }
 
     onStateChange(e) {
-      this.currentPreview = null; // сброс предпросмотра при изменении состояния
       this.render(e.detail);
     }
 
-    onPreview(e) {
-      this.currentPreview = e.detail.programId;
-      this.render(this.parentAppliance ? this.parentAppliance.state : null);
+    onUiAction(e) {
+      const { actionType, detail } = e.detail;
+      if (actionType === 'program-preview') {
+        // Показываем предпросмотр, но не меняем состояние прибора
+        this.displayEl.classList.remove('off', 'error');
+        this.displayEl.classList.add('preview');
+        const time = this.programTimes[detail.programId] || '--:--';
+        this.displayEl.textContent = time;
+        // Через 2 секунды возвращаем текущее состояние, если не было нового preview
+        if (this._previewTimeout) clearTimeout(this._previewTimeout);
+        this._previewTimeout = setTimeout(() => {
+          if (this.parentAppliance) {
+            this.render(this.parentAppliance.state);
+          }
+          this._previewTimeout = null;
+        }, 2000);
+      }
     }
 
     render(state) {
-      this.displayEl.classList.remove('off', 'error');
-      if (this.currentPreview) {
-        const time = this.programTimes[this.currentPreview] || '--:--';
-        this.displayEl.textContent = time;
-        this.displayEl.classList.add('off'); // приглушённый вид для предпросмотра
-        return;
+      if (this._previewTimeout) {
+        clearTimeout(this._previewTimeout);
+        this._previewTimeout = null;
       }
+      this.displayEl.classList.remove('off', 'error', 'preview');
       if (!state) return;
       if (state.activeError) {
         this.displayEl.classList.add('error');
@@ -727,62 +698,57 @@
   const btnTemplate = document.createElement('template');
   btnTemplate.innerHTML = `
     <style>
-      :host {
-        display: inline-block;
-        user-select: none;
-      }
+      :host { display:inline-block; user-select:none; }
       .btn {
-        height: 44px;
-        padding: 0 14px;
-        border-radius: 12px;
-        background: linear-gradient(145deg, #e6e7eb, #ffffff);
-        border: 1px solid rgba(255,255,255,0.5);
-        box-shadow: 4px 4px 10px rgba(160,180,200,0.4),
-                    -4px -4px 10px rgba(255,255,255,0.8);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        cursor: pointer;
-        transition: all 0.15s;
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: #2c3e50;
+        height:44px;
+        padding:0 14px;
+        border-radius:12px;
+        background:linear-gradient(145deg,#e6e7eb,#ffffff);
+        border:1px solid rgba(255,255,255,0.5);
+        box-shadow:4px 4px 10px rgba(160,180,200,0.4), -4px -4px 10px rgba(255,255,255,0.8);
+        display:flex;
+        align-items:center;
+        gap:6px;
+        cursor:pointer;
+        transition:all 0.15s;
+        font-weight:600;
+        font-size:0.85rem;
+        color:#2c3e50;
       }
       .btn:active:not(.disabled) {
-        background: #dde0e8;
-        box-shadow: inset 2px 2px 6px rgba(160,180,200,0.5),
-                    inset -2px -2px 6px rgba(255,255,255,0.8);
+        background:#dde0e8;
+        box-shadow:inset 2px 2px 6px rgba(160,180,200,0.5), inset -2px -2px 6px rgba(255,255,255,0.8);
       }
       .btn.disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        pointer-events: none;
+        opacity:0.5;
+        cursor:not-allowed;
+        pointer-events:none;
       }
       .led {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #d1d1d6;
-        transition: all 0.3s;
+        width:8px;
+        height:8px;
+        border-radius:50%;
+        background:#d1d1d6;
+        transition:all 0.3s;
       }
       .btn.ready .led {
-        background: #34c759;
-        box-shadow: 0 0 10px #34c759;
-        animation: pulse 1.5s infinite ease-in-out;
+        background:#34c759;
+        box-shadow:0 0 10px #34c759;
+        animation:pulse 1.5s infinite ease-in-out;
       }
       .btn.running .led {
-        background: #34c759;
-        box-shadow: 0 0 10px #34c759;
-        animation: none;
+        background:#34c759;
+        box-shadow:0 0 10px #34c759;
+        animation:none;
       }
       .btn.paused .led {
-        background: #f59e0b;
-        box-shadow: 0 0 8px #f59e0b;
+        background:#f59e0b;
+        box-shadow:0 0 8px #f59e0b;
       }
       @keyframes pulse {
-        0% { opacity: 0.4; transform: scale(0.9); }
-        50% { opacity: 1; transform: scale(1.1); }
-        100% { opacity: 0.4; transform: scale(0.9); }
+        0% { opacity:0.4; transform:scale(0.9); }
+        50% { opacity:1; transform:scale(1.1); }
+        100% { opacity:0.4; transform:scale(0.9); }
       }
     </style>
     <button class="btn disabled" id="btn">
@@ -851,7 +817,6 @@
         this.label.textContent = 'ERROR';
         return;
       }
-      // Готов к старту
       this.btn.classList.add('ready');
       this.label.textContent = 'START';
     }
@@ -859,20 +824,11 @@
     onClick() {
       if (this.btn.classList.contains('disabled')) return;
       const isRunning = this.state?.cycleStatus === 'running';
-      if (isRunning) {
-        this.dispatchEvent(new CustomEvent('ui-action', {
-          detail: { actionType: 'simulation-paused', detail: {} },
-          bubbles: true,
-          composed: true
-        }));
-      } else {
-        // Если paused или stopped – отправляем simulation-started (для paused это продолжение)
-        this.dispatchEvent(new CustomEvent('ui-action', {
-          detail: { actionType: 'simulation-started', detail: { programId: this.state?.currentProgram } },
-          bubbles: true,
-          composed: true
-        }));
-      }
+      this.dispatchEvent(new CustomEvent('ui-action', {
+        detail: { actionType: isRunning ? 'simulation-paused' : 'simulation-started', detail: { programId: this.state?.currentProgram } },
+        bubbles: true,
+        composed: true
+      }));
     }
   }
   customElements.define('app-button-start', ButtonStart);
@@ -882,31 +838,30 @@
   basketTemplate.innerHTML = `
     <style>
       :host {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
-        padding: 12px 0 4px 0;
-        flex-wrap: wrap;
+        display:flex;
+        gap:12px;
+        justify-content:center;
+        padding:12px 0 4px 0;
+        flex-wrap:wrap;
       }
       .item {
-        width: 48px;
-        height: 48px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        cursor: grab;
-        background: #ffffff;
-        box-shadow: 4px 4px 8px rgba(160,180,200,0.3),
-                    -4px -4px 8px rgba(255,255,255,0.7);
-        transition: transform 0.15s;
-        user-select: none;
+        width:48px;
+        height:48px;
+        border-radius:10px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:24px;
+        cursor:grab;
+        background:#ffffff;
+        box-shadow:4px 4px 8px rgba(160,180,200,0.3), -4px -4px 8px rgba(255,255,255,0.7);
+        transition:transform 0.15s;
+        user-select:none;
       }
-      .item:active { cursor: grabbing; }
-      .item.red { background: #fca5a5; }
-      .item.white { background: #f1f5f9; border: 1px solid #d1d5db; }
-      .item.dragging { opacity: 0.4; }
+      .item:active { cursor:grabbing; }
+      .item.red { background:#fca5a5; }
+      .item.white { background:#f1f5f9; border:1px solid #d1d5db; }
+      .item.dragging { opacity:0.4; }
     </style>
     <div class="item red" draggable="true" data-color="red">👕</div>
     <div class="item white" draggable="true" data-color="white">👚</div>
@@ -935,50 +890,48 @@
   drumTemplate.innerHTML = `
     <style>
       :host {
-        display: block;
-        width: 150px;
-        height: 150px;
-        border-radius: 50%;
-        background: #2d3748;
-        border: 6px solid #4a5568;
-        box-shadow: inset 0 0 20px rgba(0,0,0,0.5),
-                    0 0 0 4px #b0b8c4,
-                    0 8px 16px rgba(0,0,0,0.2);
-        position: relative;
-        overflow: hidden;
-        transition: border-color 0.3s;
+        display:block;
+        width:150px;
+        height:150px;
+        border-radius:50%;
+        background:#2d3748;
+        border:6px solid #4a5568;
+        box-shadow:inset 0 0 20px rgba(0,0,0,0.5), 0 0 0 4px #b0b8c4, 0 8px 16px rgba(0,0,0,0.2);
+        position:relative;
+        overflow:hidden;
+        transition:border-color 0.3s;
       }
       .drum-inner {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        padding: 12px;
-        box-sizing: border-box;
+        width:100%;
+        height:100%;
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        justify-content:center;
+        gap:4px;
+        padding:12px;
+        box-sizing:border-box;
       }
       .drum-inner span {
-        font-size: 22px;
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        font-size:22px;
+        filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));
       }
       :host(.spinning) .drum-inner {
-        animation: spin 2s infinite linear;
+        animation:spin 2s infinite linear;
       }
       @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% { transform:rotate(0deg); }
+        100% { transform:rotate(360deg); }
       }
       .drop-zone {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(255,255,255,0.2);
-        font-size: 12px;
-        pointer-events: none;
+        position:absolute;
+        top:0; left:0; right:0; bottom:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:rgba(255,255,255,0.2);
+        font-size:12px;
+        pointer-events:none;
       }
     </style>
     <div class="drum-inner" id="content"></div>
@@ -1058,84 +1011,78 @@
   hatchTemplate.innerHTML = `
     <style>
       :host {
-        display: block;
-        margin-top: 10px;
-        padding: 10px 0 4px 0;
-        border-top: 1px solid rgba(0,0,0,0.05);
+        display:block;
+        margin-top:10px;
+        padding:10px 0 4px 0;
+        border-top:1px solid rgba(0,0,0,0.05);
       }
       .hatch-area {
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 8px;
+        display:flex;
+        justify-content:flex-end;
+        align-items:center;
+        gap:8px;
       }
       .hatch-door {
-        width: 50px;
-        height: 44px;
-        background: #e8eaf0;
-        border-radius: 6px 6px 0 0;
-        border: 2px solid #cbd5e1;
-        border-bottom: none;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-        transition: all 0.2s;
-        position: relative;
+        width:50px;
+        height:44px;
+        background:#e8eaf0;
+        border-radius:6px 6px 0 0;
+        border:2px solid #cbd5e1;
+        border-bottom:none;
+        cursor:pointer;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:18px;
+        box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);
+        transition:all 0.2s;
+        position:relative;
       }
-      .hatch-door:hover {
-        background: #dce0e8;
-      }
+      .hatch-door:hover { background:#dce0e8; }
       .hatch-door.open {
-        border-radius: 0 0 6px 6px;
-        border-bottom: 2px solid #cbd5e1;
-        border-top: none;
+        border-radius:0 0 6px 6px;
+        border-bottom:2px solid #cbd5e1;
+        border-top:none;
       }
       .hatch-content {
-        display: none;
-        background: #1e293b;
-        border-radius: 8px;
-        padding: 8px 12px;
-        color: #f1f5f9;
-        font-size: 12px;
-        gap: 6px;
-        align-items: center;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        display:none;
+        background:#1e293b;
+        border-radius:8px;
+        padding:8px 12px;
+        color:#f1f5f9;
+        font-size:12px;
+        gap:6px;
+        align-items:center;
+        box-shadow:0 4px 12px rgba(0,0,0,0.3);
       }
-      .hatch-content.visible {
-        display: flex;
-      }
+      .hatch-content.visible { display:flex; }
       .filter-plug {
-        width: 24px;
-        height: 24px;
-        background: #4b5563;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        border: 1px dashed #94a3b8;
-        transition: background 0.2s;
+        width:24px;
+        height:24px;
+        background:#4b5563;
+        border-radius:50%;
+        cursor:pointer;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:14px;
+        border:1px dashed #94a3b8;
+        transition:background 0.2s;
       }
-      .filter-plug:hover {
-        background: #6b7280;
-      }
+      .filter-plug:hover { background:#6b7280; }
       .coin {
-        font-size: 18px;
-        cursor: pointer;
-        animation: bounce 1s infinite alternate;
+        font-size:18px;
+        cursor:pointer;
+        animation:bounce 1s infinite alternate;
       }
       @keyframes bounce {
-        0% { transform: scale(1); }
-        100% { transform: scale(1.2); }
+        0% { transform:scale(1); }
+        100% { transform:scale(1.2); }
       }
       .hatch-label {
-        font-size: 10px;
-        color: #94a3b8;
-        margin-right: auto;
+        font-size:10px;
+        color:#94a3b8;
+        margin-right:auto;
       }
     </style>
     <div class="hatch-area">
@@ -1239,64 +1186,62 @@
   doorTemplate.innerHTML = `
     <style>
       :host {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 160px;
-        height: 160px;
-        border-radius: 50%;
-        background: rgba(200, 225, 240, 0.4);
-        border: 8px solid #b0b8c4;
-        box-shadow: 0 0 0 4px #e8ecf1, 0 8px 20px rgba(0,0,0,0.2);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: transform 0.3s, opacity 0.3s, border-color 0.3s;
-        z-index: 10;
-        backdrop-filter: blur(2px);
-        user-select: none;
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        width:160px;
+        height:160px;
+        border-radius:50%;
+        background:rgba(200,225,240,0.4);
+        border:8px solid #b0b8c4;
+        box-shadow:0 0 0 4px #e8ecf1, 0 8px 20px rgba(0,0,0,0.2);
+        cursor:pointer;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        transition:transform 0.3s, opacity 0.3s, border-color 0.3s;
+        z-index:10;
+        backdrop-filter:blur(2px);
+        user-select:none;
       }
       :host(.open) {
-        transform: translate(-50%, -50%) scale(0.8);
-        opacity: 0.3;
-        pointer-events: none;
-        border-color: #8fa8b8;
+        transform:translate(-50%, -50%) scale(0.8);
+        opacity:0.3;
+        pointer-events:none;
+        border-color:#8fa8b8;
       }
       .handle {
-        width: 18px;
-        height: 40px;
-        background: #9aa8b5;
-        border-radius: 6px 6px 10px 10px;
-        box-shadow: inset 0 -2px 4px rgba(0,0,0,0.2);
-        position: absolute;
-        right: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        border: 1px solid #7d8d9e;
+        width:18px;
+        height:40px;
+        background:#9aa8b5;
+        border-radius:6px 6px 10px 10px;
+        box-shadow:inset 0 -2px 4px rgba(0,0,0,0.2);
+        position:absolute;
+        right:12px;
+        top:50%;
+        transform:translateY(-50%);
+        border:1px solid #7d8d9e;
       }
       .glass {
-        width: 80%;
-        height: 80%;
-        border-radius: 50%;
-        background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), rgba(200,225,240,0.1));
-        box-shadow: inset 0 0 30px rgba(0,0,0,0.1);
+        width:80%;
+        height:80%;
+        border-radius:50%;
+        background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), rgba(200,225,240,0.1));
+        box-shadow:inset 0 0 30px rgba(0,0,0,0.1);
       }
       .lock-icon {
-        position: absolute;
-        bottom: 10px;
-        right: 10px;
-        font-size: 14px;
-        color: #ef4444;
-        display: none;
+        position:absolute;
+        bottom:10px;
+        right:10px;
+        font-size:14px;
+        color:#ef4444;
+        display:none;
       }
-      :host(.locked) .lock-icon {
-        display: block;
-      }
+      :host(.locked) .lock-icon { display:block; }
       :host(.locked) {
-        border-color: #ef4444;
-        cursor: not-allowed;
+        border-color:#ef4444;
+        cursor:not-allowed;
       }
     </style>
     <div class="glass"></div>
@@ -1377,7 +1322,7 @@
   footer.textContent = 'Кликните по дверце, чтобы открыть/закрыть. Перетащите вещи в барабан, выберите режим и нажмите START.';
   container.appendChild(footer);
 
-  console.log('🚀 Приложение загружено. Ошибка Maximum call stack size exceeded исправлена!');
+  console.log('🚀 Приложение загружено. Стабильная версия без рекурсий.');
 </script>
 </body>
 </html>
