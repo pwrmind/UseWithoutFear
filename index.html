@@ -355,218 +355,227 @@
   // ================================================================
 
   // 2.1 Крутилка <app-rotary-knob>
-  const knobTemplate = document.createElement('template');
-  knobTemplate.innerHTML = `
-    <style>
-      :host {
-        display:inline-block;
-        width:80px;
-        height:80px;
-        user-select:none;
-        touch-action:none;
-      }
-      :host(.disabled) .knob-body {
-        pointer-events:none;
-        opacity:0.6;
-        cursor:not-allowed;
-      }
-      .knob-container {
-        position:relative;
-        width:100%;
-        height:100%;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-      }
-      .knob-body {
-        width:85%;
-        height:85%;
-        border-radius:50%;
-        background:linear-gradient(145deg,#ffffff,#d9dce3);
-        box-shadow:6px 6px 12px rgba(160,180,200,0.5), -6px -6px 12px rgba(255,255,255,0.9), inset 1px 1px 2px rgba(255,255,255,0.6);
-        cursor:grab;
-        position:relative;
-        transition:box-shadow 0.15s, transform 0.05s;
-        border:1px solid rgba(255,255,255,0.3);
-      }
-      .knob-body:active {
-        cursor:grabbing;
-        box-shadow:2px 2px 6px rgba(160,180,200,0.5), -2px -2px 6px rgba(255,255,255,0.9);
-      }
-      .pointer {
-        position:absolute;
-        top:8px;
-        left:50%;
-        width:4px;
-        height:16px;
-        background:#2c3e50;
-        border-radius:2px;
-        transform:translateX(-50%);
-        box-shadow:0 1px 3px rgba(0,0,0,0.2);
-      }
-      .ring {
-        position:absolute;
-        top:6px;
-        left:6px;
-        right:6px;
-        bottom:6px;
-        border-radius:50%;
-        border:1px solid rgba(255,255,255,0.5);
-        pointer-events:none;
-      }
-    </style>
-    <div class="knob-container">
-      <div class="knob-body" id="knob">
-        <div class="pointer"></div>
-        <div class="ring"></div>
-      </div>
+  // 2.1 Крутилка <app-rotary-knob> (исправленная версия)
+const knobTemplate = document.createElement('template');
+knobTemplate.innerHTML = `
+  <style>
+    :host {
+      display:inline-block;
+      width:80px;
+      height:80px;
+      user-select:none;
+      touch-action:none;
+    }
+    :host(.disabled) .knob-body {
+      pointer-events:none;
+      opacity:0.6;
+      cursor:not-allowed;
+    }
+    .knob-container {
+      position:relative;
+      width:100%;
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .knob-body {
+      width:85%;
+      height:85%;
+      border-radius:50%;
+      background:linear-gradient(145deg,#ffffff,#d9dce3);
+      box-shadow:6px 6px 12px rgba(160,180,200,0.5), -6px -6px 12px rgba(255,255,255,0.9), inset 1px 1px 2px rgba(255,255,255,0.6);
+      cursor:grab;
+      position:relative;
+      transition:box-shadow 0.15s, transform 0.05s;
+      border:1px solid rgba(255,255,255,0.3);
+    }
+    .knob-body:active {
+      cursor:grabbing;
+      box-shadow:2px 2px 6px rgba(160,180,200,0.5), -2px -2px 6px rgba(255,255,255,0.9);
+    }
+    .pointer {
+      position:absolute;
+      top:8px;
+      left:50%;
+      width:4px;
+      height:16px;
+      background:#2c3e50;
+      border-radius:2px;
+      transform:translateX(-50%);
+      box-shadow:0 1px 3px rgba(0,0,0,0.2);
+    }
+    .ring {
+      position:absolute;
+      top:6px;
+      left:6px;
+      right:6px;
+      bottom:6px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,0.5);
+      pointer-events:none;
+    }
+  </style>
+  <div class="knob-container">
+    <div class="knob-body" id="knob">
+      <div class="pointer"></div>
+      <div class="ring"></div>
     </div>
-  `;
+  </div>
+`;
 
-  class RotaryKnob extends HTMLElement {
-    constructor() {
-      super();
-      this.attachShadow({ mode: 'open' });
-      this.shadowRoot.appendChild(knobTemplate.content.cloneNode(true));
+class RotaryKnob extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this.shadowRoot.appendChild(knobTemplate.content.cloneNode(true));
 
-      this.steps = [
-        { angle:0,   programId:'off',        name:'Выкл' },
-        { angle:45,  programId:'cotton_60',  name:'Хлопок 60°' },
-        { angle:90,  programId:'synthetic',  name:'Синтетика' },
-        { angle:135, programId:'wool',       name:'Шерсть' },
-        { angle:180, programId:'spin_only',  name:'Отжим' },
-        { angle:225, programId:'eco_40',     name:'Эко 40°' }
-      ];
+    this.steps = [
+      { angle:0,   programId:'off',        name:'Выкл' },
+      { angle:45,  programId:'cotton_60',  name:'Хлопок 60°' },
+      { angle:90,  programId:'synthetic',  name:'Синтетика' },
+      { angle:135, programId:'wool',       name:'Шерсть' },
+      { angle:180, programId:'spin_only',  name:'Отжим' },
+      { angle:225, programId:'eco_40',     name:'Эко 40°' }
+    ];
 
-      this.currentAngle = 0;
-      this.currentStepIndex = 0;
-      this.isDragging = false;
-      this.startAngle = 0;
-      this.knobBody = this.shadowRoot.getElementById('knob');
-      this.parentAppliance = null;
+    this.currentAngle = 0;
+    this.currentStepIndex = 0;
+    this.isDragging = false;
+    this.startAngle = 0;
+    this.knobBody = this.shadowRoot.getElementById('knob');
+    this.parentAppliance = null;
 
-      this.onStart = this.onStart.bind(this);
-      this.onMove = this.onMove.bind(this);
-      this.onEnd = this.onEnd.bind(this);
-      this.onApplianceState = this.onApplianceState.bind(this);
+    this.onStart = this.onStart.bind(this);
+    this.onMove = this.onMove.bind(this);
+    this.onEnd = this.onEnd.bind(this);
+    this.onApplianceState = this.onApplianceState.bind(this);
+  }
+
+  connectedCallback() {
+    this.knobBody.addEventListener('mousedown', this.onStart);
+    this.knobBody.addEventListener('touchstart', this.onStart, { passive: true });
+    this.parentAppliance = this.closest('app-appliance');
+    if (this.parentAppliance) {
+      this.parentAppliance.addEventListener('appliance-state-changed', this.onApplianceState);
+    }
+    this._updateRotation(0);
+  }
+
+  disconnectedCallback() {
+    this.knobBody.removeEventListener('mousedown', this.onStart);
+    this.knobBody.removeEventListener('touchstart', this.onStart);
+    if (this.parentAppliance) {
+      this.parentAppliance.removeEventListener('appliance-state-changed', this.onApplianceState);
+    }
+    this._removeGlobalListeners();
+  }
+
+  onApplianceState(e) {
+    const state = e.detail;
+    if (state.cycleStatus === 'running' || state.cycleStatus === 'paused') {
+      this.classList.add('disabled');
+    } else {
+      this.classList.remove('disabled');
     }
 
-    connectedCallback() {
-      this.knobBody.addEventListener('mousedown', this.onStart);
-      this.knobBody.addEventListener('touchstart', this.onStart, { passive: true });
-      this.parentAppliance = this.closest('app-appliance');
-      if (this.parentAppliance) {
-        this.parentAppliance.addEventListener('appliance-state-changed', this.onApplianceState);
+    // Исправление: сбрасываем крутилку только если программа явно 'off'
+    if (state.currentProgram === 'off' && this.currentStepIndex !== 0) {
+      this._silentSnapTo(0);
+    }
+    // Синхронизация с выбранной программой (если она не 'off' и не 'none')
+    else if (state.currentProgram !== 'off' && state.currentProgram !== 'none') {
+      const targetIndex = this.steps.findIndex(s => s.programId === state.currentProgram);
+      if (targetIndex !== -1 && targetIndex !== this.currentStepIndex) {
+        this._silentSnapTo(targetIndex);
       }
-      this._updateRotation(0);
-    }
-
-    disconnectedCallback() {
-      this.knobBody.removeEventListener('mousedown', this.onStart);
-      this.knobBody.removeEventListener('touchstart', this.onStart);
-      if (this.parentAppliance) {
-        this.parentAppliance.removeEventListener('appliance-state-changed', this.onApplianceState);
-      }
-      this._removeGlobalListeners();
-    }
-
-    onApplianceState(e) {
-      const state = e.detail;
-      if (state.cycleStatus === 'running' || state.cycleStatus === 'paused') {
-        this.classList.add('disabled');
-      } else {
-        this.classList.remove('disabled');
-      }
-      if (state.power === 'off' && state.cycleStatus === 'stopped' && this.currentStepIndex !== 0) {
-        this._silentSnapTo(0);
-      }
-    }
-
-    _getAngle(e) {
-      const rect = this.knobBody.getBoundingClientRect();
-      const cx = rect.left + rect.width/2;
-      const cy = rect.top + rect.height/2;
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      let angle = Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI) + 90;
-      if (angle < 0) angle += 360;
-      return angle;
-    }
-
-    onStart(e) {
-      if (this.classList.contains('disabled')) return;
-      this.isDragging = true;
-      const clickAngle = this._getAngle(e);
-      this.startAngle = clickAngle - this.currentAngle;
-      document.addEventListener('mousemove', this.onMove);
-      document.addEventListener('mouseup', this.onEnd);
-      document.addEventListener('touchmove', this.onMove, { passive: false });
-      document.addEventListener('touchend', this.onEnd);
-    }
-
-    onMove(e) {
-      if (!this.isDragging) return;
-      e.preventDefault?.();
-      let angle = this._getAngle(e) - this.startAngle;
-      if (angle < 0) angle += 360;
-      if (angle >= 360) angle -= 360;
-      this.currentAngle = angle;
-      this._updateRotation(angle);
-      this._checkSnap(angle);
-    }
-
-    onEnd() {
-      if (!this.isDragging) return;
-      this.isDragging = false;
-      this._removeGlobalListeners();
-      const closest = this.steps[this.currentStepIndex];
-      this.currentAngle = closest.angle;
-      this._updateRotation(this.currentAngle);
-      this._dispatchAction('program-selected', { programId: closest.programId, name: closest.name });
-    }
-
-    _checkSnap(angle) {
-      let closestIndex = 0, minDiff = 360;
-      this.steps.forEach((s, i) => {
-        let diff = Math.abs(angle - s.angle);
-        if (diff > 180) diff = 360 - diff;
-        if (diff < minDiff) { minDiff = diff; closestIndex = i; }
-      });
-      if (closestIndex !== this.currentStepIndex) {
-        this.currentStepIndex = closestIndex;
-        if (navigator.vibrate) navigator.vibrate(8);
-        this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
-      }
-    }
-
-    _updateRotation(angle) {
-      this.knobBody.style.transform = `rotate(${angle}deg)`;
-    }
-
-    _silentSnapTo(index) {
-      const step = this.steps[index];
-      this.currentAngle = step.angle;
-      this.currentStepIndex = index;
-      this._updateRotation(step.angle);
-    }
-
-    _dispatchAction(type, detail) {
-      this.dispatchEvent(new CustomEvent('ui-action', {
-        detail: { actionType: type, detail },
-        bubbles: true,
-        composed: true
-      }));
-    }
-
-    _removeGlobalListeners() {
-      document.removeEventListener('mousemove', this.onMove);
-      document.removeEventListener('mouseup', this.onEnd);
-      document.removeEventListener('touchmove', this.onMove);
-      document.removeEventListener('touchend', this.onEnd);
     }
   }
-  customElements.define('app-rotary-knob', RotaryKnob);
 
+  _getAngle(e) {
+    const rect = this.knobBody.getBoundingClientRect();
+    const cx = rect.left + rect.width/2;
+    const cy = rect.top + rect.height/2;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    let angle = Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI) + 90;
+    if (angle < 0) angle += 360;
+    return angle;
+  }
+
+  onStart(e) {
+    if (this.classList.contains('disabled')) return;
+    this.isDragging = true;
+    const clickAngle = this._getAngle(e);
+    this.startAngle = clickAngle - this.currentAngle;
+    document.addEventListener('mousemove', this.onMove);
+    document.addEventListener('mouseup', this.onEnd);
+    document.addEventListener('touchmove', this.onMove, { passive: false });
+    document.addEventListener('touchend', this.onEnd);
+  }
+
+  onMove(e) {
+    if (!this.isDragging) return;
+    e.preventDefault?.();
+    let angle = this._getAngle(e) - this.startAngle;
+    if (angle < 0) angle += 360;
+    if (angle >= 360) angle -= 360;
+    this.currentAngle = angle;
+    this._updateRotation(angle);
+    this._checkSnap(angle);
+  }
+
+  onEnd() {
+    if (!this.isDragging) return;
+    this.isDragging = false;
+    this._removeGlobalListeners();
+    const closest = this.steps[this.currentStepIndex];
+    this.currentAngle = closest.angle;
+    this._updateRotation(this.currentAngle);
+    this._dispatchAction('program-selected', { programId: closest.programId, name: closest.name });
+  }
+
+  _checkSnap(angle) {
+    let closestIndex = 0, minDiff = 360;
+    this.steps.forEach((s, i) => {
+      let diff = Math.abs(angle - s.angle);
+      if (diff > 180) diff = 360 - diff;
+      if (diff < minDiff) { minDiff = diff; closestIndex = i; }
+    });
+    if (closestIndex !== this.currentStepIndex) {
+      this.currentStepIndex = closestIndex;
+      if (navigator.vibrate) navigator.vibrate(8);
+      this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
+    }
+  }
+
+  _updateRotation(angle) {
+    this.knobBody.style.transform = `rotate(${angle}deg)`;
+  }
+
+  _silentSnapTo(index) {
+    const step = this.steps[index];
+    this.currentAngle = step.angle;
+    this.currentStepIndex = index;
+    this._updateRotation(step.angle);
+  }
+
+  _dispatchAction(type, detail) {
+    this.dispatchEvent(new CustomEvent('ui-action', {
+      detail: { actionType: type, detail },
+      bubbles: true,
+      composed: true
+    }));
+  }
+
+  _removeGlobalListeners() {
+    document.removeEventListener('mousemove', this.onMove);
+    document.removeEventListener('mouseup', this.onEnd);
+    document.removeEventListener('touchmove', this.onMove);
+    document.removeEventListener('touchend', this.onEnd);
+  }
+}
+customElements.define('app-rotary-knob', RotaryKnob);
   // 2.2 Дисплей <app-digital-display>
   const displayTemplate = document.createElement('template');
   displayTemplate.innerHTML = `
