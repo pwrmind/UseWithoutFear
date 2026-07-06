@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Стиральная машина — симулятор</title>
+  <style>
+    /* Глобальные стили */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #e8ecf1;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      padding: 20px;
+    }
+    .app-header {
+      margin-bottom: 20px;
+      text-align: center;
+      color: #2c3e50;
+    }
+    .app-header h1 {
+      font-weight: 400;
+      font-size: 1.6rem;
+      letter-spacing: 0.5px;
+    }
+    .app-header p {
+      font-size: 0.9rem;
+      color: #6c7a8a;
+    }
+    .status-badge {
+      display: inline-block;
+      background: #1e293b;
+      color: #94a3b8;
+      padding: 4px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      margin-top: 6px;
+    }
+    /* Неоморфные карточки */
+    .neo-card {
+      background: #f0f3f7;
+      border-radius: 32px;
+      box-shadow: 12px 12px 24px rgba(160, 180, 200, 0.4),
+                  -12px -12px 24px rgba(255, 255, 255, 0.8);
+      padding: 20px;
+      max-width: 420px;
+      width: 100%;
+      transition: box-shadow 0.2s;
+    }
+    @media (max-width: 480px) {
+      .neo-card { padding: 12px; }
+      .app-header h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>🧺 Стиралка без страха</h1>
+    <p>Интерактивный тренажёр передней панели</p>
+    <span class="status-badge" id="status-badge">● Ожидание</span>
+  </div>
+
+  <div class="neo-card" id="app-container">
+    <!-- Здесь будет размещён прибор через DSL -->
+    <app-appliance type="washer" id="washer">
+      <!-- Панель управления -->
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 16px 4px; gap: 6px; flex-wrap: wrap;">
+        <app-rotary-knob></app-rotary-knob>
+        <app-digital-display></app-digital-display>
+        <app-button-start></app-button-start>
+      </div>
+
+      <!-- Зона люка с барабаном -->
+      <div style="position: relative; height: 200px; display: flex; justify-content: center; align-items: center; margin: 4px 0;">
+        <app-drum-tank id="drum"></app-drum-tank>
+      </div>
+
+      <!-- Сервисный люк (фильтр) -->
+      <app-service-hatch></app-service-hatch>
+    </app-appliance>
+  </div>
+
+  <!-- Вся логика и компоненты в одном скрипте -->
+  <script type="module">
+    // ------------------------------------------------------------
+    // 1. МОДУЛЬ СОСТОЯНИЯ (используется внутри корневого компонента)
+    // ------------------------------------------------------------
+    // Состояние прибора хранится в самом компоненте <app-appliance>.
+    // Но для удобства мы можем вынести утилиты.
+
+    // ------------------------------------------------------------
+    // 2. КОРНЕВОЙ КОМПОНЕНТ <app-appliance>
+    // ------------------------------------------------------------
+    const applianceTemplate = document.createElement('template');
+    applianceTemplate.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          width: 100%;
+          font-family: system-ui, sans-serif;
+        }
+        .housing {
+          background: #f0f3f7;
+          border-radius: 28px;
+          padding: 16px 16px 6px 16px;
+          box-shadow: inset 0 2px 6px rgba(0,0,0,0.02),
+                      8px 8px 16px rgba(160,180,200,0.4),
+                      -8px -8px 16px rgba(255,255,255,0.8);
+          transition: box-shadow 0.2s, transform 0.1s;
+          box-sizing: border-box;
+        }
+        /* Эффекты */
+        .housing.shake {
+          animation: shake 0.12s infinite linear;
+        }
+        .housing.burn {
+          animation: flashBurn 0.6s ease-out;
+        }
+        @keyframes shake {
+          0% { transform: translate(0,0) rotate(0deg); }
+          25% { transform: translate(-3px,2px) rotate(-0.5deg); }
+          50% { transform: translate(3px,-1px) rotate(0.5deg); }
+          75% { transform: translate(-2px,-2px) rotate(0deg); }
+          100% { transform: translate(2px,1px) rotate(-0.5deg); }
+        }
+        @keyframes flashBurn {
+          0% { background-color: #f0f3f7; filter: brightness(1); }
+          20% { background-color: #ff6b6b; filter: brightness(1.8); }
+          100% { background-color: #2d2f33; filter: brightness(0.3); }
+        }
+        .slot-wrapper {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+      </style>
+      <div class="housing" id="housing">
+        <div class="slot-wrapper">
+          <slot></slot>
+        </div>
+      </div>
+    `;
+
+    class ApplianceContainer extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(applianceTemplate.content.cloneNode(true));
+        this.housing = this.shadowRoot.getElementById('housing');
+
+        // Начальное состояние
+        this.state = {
+          power: 'off',             // 'on' | 'off'
+          currentProgram: 'none',   // id программы
+          cycleStatus: 'stopped',   // 'stopped' | 'running' | 'paused' | 'error'
+          activeError: null,        // код ошибки или null
+          isClogged: true,          // засор фильтра (по умолчанию включён для демонстрации)
+          loadedItems: [],          // массив загруженных вещей
+          isDoorOpen: false,        // открыта ли дверца
+          boltsRemoved: false,      // (для будущих сценариев)
+        };
+
+        // Привязка обработчиков
+        this.handleChildAction = this.handleChildAction.bind(this);
+        this.boundUpdateState = this.updateState.bind(this);
+      }
+
+      connectedCallback() {
+        // Слушаем все события ui-action от дочерних компонентов
+        this.addEventListener('ui-action', this.handleChildAction);
+        // Инициализируем атрибуты для DSL (если нужно)
+        if (!this.hasAttribute('type')) this.setAttribute('type', 'washer');
+        // Устанавливаем начальное состояние ошибки засора на дисплей
+        this.updateState({ activeError: null }); // пока нет ошибки
+        // Отправляем начальное состояние дочерним компонентам
+        this.broadcastState();
+      }
+
+      disconnectedCallback() {
+        this.removeEventListener('ui-action', this.handleChildAction);
+      }
+
+      // Обновление состояния с уведомлением дочерних компонентов
+      updateState(partial) {
+        this.state = { ...this.state, ...partial };
+        this.broadcastState();
+        // Также обновляем атрибуты для внешнего наблюдения (если нужно)
+        if (partial.activeError !== undefined) {
+          this.setAttribute('state-error', partial.activeError || '');
+        }
+        if (partial.power !== undefined) {
+          this.setAttribute('state-power', partial.power);
+        }
+        // Обновляем статус-бейдж
+        this.updateBadge();
+      }
+
+      broadcastState() {
+        this.dispatchEvent(new CustomEvent('appliance-state-changed', {
+          detail: this.state,
+          bubbles: false,
+          composed: false
+        }));
+      }
+
+      updateBadge() {
+        const badge = document.getElementById('status-badge');
+        if (!badge) return;
+        const { power, cycleStatus, activeError } = this.state;
+        if (activeError) {
+          badge.textContent = `⚠️ Ошибка ${activeError}`;
+          badge.style.color = '#ef4444';
+          badge.style.background = '#fee2e2';
+        } else if (cycleStatus === 'running') {
+          badge.textContent = '🔄 Стирка...';
+          badge.style.color = '#16a34a';
+          badge.style.background = '#dcfce7';
+        } else if (power === 'on') {
+          badge.textContent = '● Готов к запуску';
+          badge.style.color = '#2563eb';
+          badge.style.background = '#dbeafe';
+        } else {
+          badge.textContent = '● Ожидание';
+          badge.style.color = '#6b7280';
+          badge.style.background = '#f3f4f6';
+        }
+      }
+
+      // Обработка действий от дочерних компонентов
+      async handleChildAction(event) {
+        const { actionType, detail } = event.detail;
+        // Останавливаем всплытие, чтобы не дублировать
+        event.stopPropagation();
+
+        switch (actionType) {
+          case 'program-preview':
+          case 'program-selected': {
+            const progId = detail.programId;
+            // Если программа 'off' — выключаем питание
+            const power = (progId === 'off') ? 'off' : 'on';
+            this.updateState({
+              currentProgram: progId,
+              power: power,
+              // Если выбрана программа, сбрасываем ошибку (если она была)
+              activeError: (progId === 'off') ? null : this.state.activeError,
+              cycleStatus: (progId === 'off') ? 'stopped' : this.state.cycleStatus
+            });
+            break;
+          }
+
+          case 'simulation-started': {
+            // Пользователь нажал START — запускаем проверку правил
+            const result = await this.validateStart();
+            if (result.success) {
+              // Запускаем цикл
+              this.updateState({
+                cycleStatus: 'running',
+                activeError: null
+              });
+              // Имитация окончания стирки через 5 секунд
+              setTimeout(() => {
+                if (this.state.cycleStatus === 'running') {
+                  this.updateState({
+                    cycleStatus: 'stopped',
+                    power: 'off',
+                    currentProgram: 'none'
+                  });
+                  alert('✅ Стирка завершена! Машина выключена.');
+                }
+              }, 5000);
+            } else {
+              // Ошибка: показываем код и сообщение
+              this.updateState({
+                cycleStatus: 'error',
+                activeError: result.errorCode
+              });
+              // Включаем эффект, если указан
+              if (result.effect) {
+                this.housing.classList.add(result.effect);
+                setTimeout(() => this.housing.classList.remove(result.effect), 2000);
+              }
+              // Показываем сообщение через 300 мс
+              setTimeout(() => {
+                alert(result.message);
+              }, 400);
+            }
+            break;
+          }
+
+          case 'simulation-paused': {
+            this.updateState({ cycleStatus: 'paused' });
+            break;
+          }
+
+          case 'laundry-loaded': {
+            this.updateState({ loadedItems: detail.items });
+            break;
+          }
+
+          case 'door-toggled': {
+            this.updateState({ isDoorOpen: (detail.state === 'open') });
+            break;
+          }
+
+          case 'filter-cleaned': {
+            // Пользователь достал монету из фильтра
+            this.updateState({ isClogged: false, activeError: null });
+            alert('✅ Фильтр очищен! Ошибка сброшена. Теперь можно запускать стирку.');
+            break;
+          }
+
+          default:
+            // Игнорируем другие события
+            break;
+        }
+      }
+
+      // Движок правил (валидация перед запуском)
+      async validateStart() {
+        const state = this.state;
+        // Правило 1: Засор фильтра (для режимов, требующих слива)
+        if ((state.currentProgram === 'spin_only' || state.currentProgram === 'eco_40') && state.isClogged) {
+          return {
+            success: false,
+            errorCode: 'E18',
+            effect: 'shake',
+            message: '🚨 Ошибка E18! Вода не сливается. Засор фильтра насоса. Откройте нижний люк и проверьте фильтр.'
+          };
+        }
+        // Правило 2: (можно добавить другие)
+        // Если всё хорошо
+        return { success: true };
+      }
+
+      // Публичные методы для управления извне (например, для тестов)
+      setEffect(effectName) {
+        this.housing.classList.remove('shake', 'burn');
+        if (effectName) this.housing.classList.add(effectName);
+      }
+
+      clearEffect() {
+        this.housing.classList.remove('shake', 'burn');
+      }
+    }
+
+    customElements.define('app-appliance', ApplianceContainer);
+
+    // ------------------------------------------------------------
+    // 3. КОМПОНЕНТЫ АТОМЫ И МОЛЕКУЛЫ
+    // ------------------------------------------------------------
+
+    // 3.1 Крутилка <app-rotary-knob>
+    const knobTemplate = document.createElement('template');
+    knobTemplate.innerHTML = `
+      <style>
+        :host {
+          display: inline-block;
+          width: 80px;
+          height: 80px;
+          user-select: none;
+          touch-action: none;
+        }
+        .knob-container {
+          position: relative;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .knob-body {
+          width: 85%;
+          height: 85%;
+          border-radius: 50%;
+          background: linear-gradient(145deg, #ffffff, #d9dce3);
+          box-shadow: 6px 6px 12px rgba(160,180,200,0.5),
+                      -6px -6px 12px rgba(255,255,255,0.9),
+                      inset 1px 1px 2px rgba(255,255,255,0.6);
+          cursor: grab;
+          position: relative;
+          transition: box-shadow 0.15s, transform 0.05s;
+          border: 1px solid rgba(255,255,255,0.3);
+        }
+        .knob-body:active {
+          cursor: grabbing;
+          box-shadow: 2px 2px 6px rgba(160,180,200,0.5),
+                      -2px -2px 6px rgba(255,255,255,0.9);
+        }
+        .pointer {
+          position: absolute;
+          top: 8px;
+          left: 50%;
+          width: 4px;
+          height: 16px;
+          background: #2c3e50;
+          border-radius: 2px;
+          transform: translateX(-50%);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .knob-body .ring {
+          position: absolute;
+          top: 6px;
+          left: 6px;
+          right: 6px;
+          bottom: 6px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.5);
+          pointer-events: none;
+        }
+      </style>
+      <div class="knob-container">
+        <div class="knob-body" id="knob">
+          <div class="pointer"></div>
+          <div class="ring"></div>
+        </div>
+      </div>
+    `;
+
+    class RotaryKnob extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(knobTemplate.content.cloneNode(true));
+
+        this.steps = [
+          { angle: 0,   programId: 'off',        name: 'Выкл' },
+          { angle: 45,  programId: 'cotton_60',  name: 'Хлопок 60°' },
+          { angle: 90,  programId: 'synthetic',  name: 'Синтетика' },
+          { angle: 135, programId: 'wool',       name: 'Шерсть' },
+          { angle: 180, programId: 'spin_only',  name: 'Отжим' },
+          { angle: 225, programId: 'eco_40',     name: 'Эко 40°' }
+        ];
+
+        this.currentAngle = 0;
+        this.currentStepIndex = 0;
+        this.isDragging = false;
+        this.startAngle = 0;
+        this.knobBody = this.shadowRoot.getElementById('knob');
+
+        this.onStart = this.onStart.bind(this);
+        this.onMove = this.onMove.bind(this);
+        this.onEnd = this.onEnd.bind(this);
+      }
+
+      connectedCallback() {
+        this.knobBody.addEventListener('mousedown', this.onStart);
+        this.knobBody.addEventListener('touchstart', this.onStart, { passive: true });
+        this._updateRotation(0);
+      }
+
+      disconnectedCallback() {
+        this.knobBody.removeEventListener('mousedown', this.onStart);
+        this.knobBody.removeEventListener('touchstart', this.onStart);
+        this._removeGlobalListeners();
+      }
+
+      _getAngle(e) {
+        const rect = this.knobBody.getBoundingClientRect();
+        const cx = rect.left + rect.width/2;
+        const cy = rect.top + rect.height/2;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        let angle = Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI) + 90;
+        if (angle < 0) angle += 360;
+        return angle;
+      }
+
+      onStart(e) {
+        this.isDragging = true;
+        const clickAngle = this._getAngle(e);
+        this.startAngle = clickAngle - this.currentAngle;
+        document.addEventListener('mousemove', this.onMove);
+        document.addEventListener('mouseup', this.onEnd);
+        document.addEventListener('touchmove', this.onMove, { passive: false });
+        document.addEventListener('touchend', this.onEnd);
+      }
+
+      onMove(e) {
+        if (!this.isDragging) return;
+        e.preventDefault?.();
+        let angle = this._getAngle(e) - this.startAngle;
+        if (angle < 0) angle += 360;
+        if (angle >= 360) angle -= 360;
+        this.currentAngle = angle;
+        this._updateRotation(angle);
+        this._checkSnap(angle);
+      }
+
+      onEnd() {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        this._removeGlobalListeners();
+        const closest = this.steps[this.currentStepIndex];
+        this.currentAngle = closest.angle;
+        this._updateRotation(this.currentAngle);
+        this._dispatchAction('program-selected', { programId: closest.programId, name: closest.name });
+      }
+
+      _checkSnap(angle) {
+        let closestIndex = 0, minDiff = 360;
+        this.steps.forEach((s, i) => {
+          let diff = Math.abs(angle - s.angle);
+          if (diff > 180) diff = 360 - diff;
+          if (diff < minDiff) { minDiff = diff; closestIndex = i; }
+        });
+        if (closestIndex !== this.currentStepIndex) {
+          this.currentStepIndex = closestIndex;
+          if (navigator.vibrate) navigator.vibrate(8);
+          this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
+        }
+      }
+
+      _updateRotation(angle) {
+        this.knobBody.style.transform = `rotate(${angle}deg)`;
+      }
+
+      _dispatchAction(type, detail) {
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: type, detail },
+          bubbles: true,
+          composed: true
+        }));
+      }
+
+      _removeGlobalListeners() {
+        document.removeEventListener('mousemove', this.onMove);
+        document.removeEventListener('mouseup', this.onEnd);
+        document.removeEventListener('touchmove', this.onMove);
+        document.removeEventListener('touchend', this.onEnd);
+      }
+    }
+    customElements.define('app-rotary-knob', RotaryKnob);
+
+    // 3.2 Дисплей <app-digital-display>
+    const displayTemplate = document.createElement('template');
+    displayTemplate.innerHTML = `
+      <style>
+        :host {
+          display: inline-block;
+          background: #121316;
+          border-radius: 14px;
+          padding: 8px 14px;
+          box-shadow: inset 3px 3px 8px rgba(0,0,0,0.7),
+                      inset -2px -2px 6px rgba(255,255,255,0.05),
+                      1px 1px 2px rgba(255,255,255,0.2);
+          border: 1px solid #2c2d32;
+          min-width: 80px;
+          text-align: center;
+        }
+        .digits {
+          font-family: 'Courier New', monospace;
+          font-size: 1.8rem;
+          font-weight: 700;
+          letter-spacing: 3px;
+          color: #00f3ff;
+          text-shadow: 0 0 6px rgba(0,243,255,0.6), 0 0 18px rgba(0,243,255,0.2);
+          transition: color 0.2s, text-shadow 0.2s;
+        }
+        .digits.off {
+          color: #1c2024;
+          text-shadow: none;
+        }
+        .digits.error {
+          color: #ff3b30;
+          text-shadow: 0 0 6px rgba(255,59,48,0.7), 0 0 18px rgba(255,59,48,0.3);
+          animation: blink 1.2s infinite steps(2);
+        }
+        @keyframes blink {
+          0% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      </style>
+      <div class="digits off" id="display">OFF</div>
+    `;
+
+    class DigitalDisplay extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(displayTemplate.content.cloneNode(true));
+        this.displayEl = this.shadowRoot.getElementById('display');
+        this.parentAppliance = null;
+        this.onStateChange = this.onStateChange.bind(this);
+
+        this.programTimes = {
+          'off': 'OFF',
+          'cotton_60': '02:45',
+          'synthetic': '01:20',
+          'wool': '00:45',
+          'spin_only': '00:12',
+          'eco_40': '03:15',
+          'none': '00:00'
+        };
+      }
+
+      connectedCallback() {
+        this.parentAppliance = this.closest('app-appliance');
+        if (this.parentAppliance) {
+          this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+          this.render(this.parentAppliance.state);
+        }
+      }
+
+      disconnectedCallback() {
+        if (this.parentAppliance) {
+          this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
+        }
+      }
+
+      onStateChange(e) {
+        this.render(e.detail);
+      }
+
+      render(state) {
+        this.displayEl.classList.remove('off', 'error');
+        if (state.activeError) {
+          this.displayEl.classList.add('error');
+          this.displayEl.textContent = state.activeError;
+          return;
+        }
+        if (state.power === 'off' || state.currentProgram === 'off') {
+          this.displayEl.classList.add('off');
+          this.displayEl.textContent = 'OFF';
+          return;
+        }
+        const time = this.programTimes[state.currentProgram] || '00:00';
+        this.displayEl.textContent = time;
+      }
+    }
+    customElements.define('app-digital-display', DigitalDisplay);
+
+    // 3.3 Кнопка START <app-button-start>
+    const btnTemplate = document.createElement('template');
+    btnTemplate.innerHTML = `
+      <style>
+        :host {
+          display: inline-block;
+          user-select: none;
+        }
+        .btn {
+          height: 44px;
+          padding: 0 14px;
+          border-radius: 12px;
+          background: linear-gradient(145deg, #e6e7eb, #ffffff);
+          border: 1px solid rgba(255,255,255,0.5);
+          box-shadow: 4px 4px 10px rgba(160,180,200,0.4),
+                      -4px -4px 10px rgba(255,255,255,0.8);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+          transition: all 0.15s;
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #2c3e50;
+        }
+        .btn:active:not(.disabled) {
+          background: #dde0e8;
+          box-shadow: inset 2px 2px 6px rgba(160,180,200,0.5),
+                      inset -2px -2px 6px rgba(255,255,255,0.8);
+        }
+        .btn.disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          pointer-events: none;
+        }
+        .led {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #d1d1d6;
+          transition: all 0.3s;
+        }
+        .btn.ready .led {
+          background: #34c759;
+          box-shadow: 0 0 10px #34c759;
+          animation: pulse 1.5s infinite ease-in-out;
+        }
+        .btn.running .led {
+          background: #34c759;
+          box-shadow: 0 0 10px #34c759;
+          animation: none;
+        }
+        @keyframes pulse {
+          0% { opacity: 0.4; transform: scale(0.9); }
+          50% { opacity: 1; transform: scale(1.1); }
+          100% { opacity: 0.4; transform: scale(0.9); }
+        }
+      </style>
+      <button class="btn disabled" id="btn">
+        <span class="led"></span>
+        <span id="label">START</span>
+      </button>
+    `;
+
+    class ButtonStart extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(btnTemplate.content.cloneNode(true));
+        this.btn = this.shadowRoot.getElementById('btn');
+        this.label = this.shadowRoot.getElementById('label');
+        this.parentAppliance = null;
+        this.state = null;
+        this.onStateChange = this.onStateChange.bind(this);
+        this.onClick = this.onClick.bind(this);
+      }
+
+      connectedCallback() {
+        this.parentAppliance = this.closest('app-appliance');
+        if (this.parentAppliance) {
+          this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+          this.state = this.parentAppliance.state;
+          this.render();
+        }
+        this.btn.addEventListener('click', this.onClick);
+      }
+
+      disconnectedCallback() {
+        if (this.parentAppliance) {
+          this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
+        }
+        this.btn.removeEventListener('click', this.onClick);
+      }
+
+      onStateChange(e) {
+        this.state = e.detail;
+        this.render();
+      }
+
+      render() {
+        if (!this.state) return;
+        const { power, currentProgram, cycleStatus, activeError } = this.state;
+        this.btn.classList.remove('disabled', 'ready', 'running');
+
+        if (power === 'off' || currentProgram === 'off') {
+          this.btn.classList.add('disabled');
+          this.label.textContent = 'START';
+          return;
+        }
+        if (cycleStatus === 'running') {
+          this.btn.classList.add('running');
+          this.label.textContent = 'PAUSE';
+          return;
+        }
+        if (activeError) {
+          this.btn.classList.add('disabled');
+          this.label.textContent = 'ERROR';
+          return;
+        }
+        // Готов к старту
+        this.btn.classList.add('ready');
+        this.label.textContent = 'START';
+      }
+
+      onClick() {
+        if (this.btn.classList.contains('disabled')) return;
+        const isRunning = this.state?.cycleStatus === 'running';
+        const action = isRunning ? 'simulation-paused' : 'simulation-started';
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: action, detail: { programId: this.state?.currentProgram } },
+          bubbles: true,
+          composed: true
+        }));
+      }
+    }
+    customElements.define('app-button-start', ButtonStart);
+
+    // 3.4 Корзина с бельём <app-laundry-basket>
+    const basketTemplate = document.createElement('template');
+    basketTemplate.innerHTML = `
+      <style>
+        :host {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+          padding: 12px 0 4px 0;
+          flex-wrap: wrap;
+        }
+        .item {
+          width: 48px;
+          height: 48px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 24px;
+          cursor: grab;
+          background: #ffffff;
+          box-shadow: 4px 4px 8px rgba(160,180,200,0.3),
+                      -4px -4px 8px rgba(255,255,255,0.7);
+          transition: transform 0.15s;
+          user-select: none;
+        }
+        .item:active { cursor: grabbing; }
+        .item.red { background: #fca5a5; }
+        .item.white { background: #f1f5f9; border: 1px solid #d1d5db; }
+        .item.dragging { opacity: 0.4; }
+      </style>
+      <div class="item red" draggable="true" data-color="red">👕</div>
+      <div class="item white" draggable="true" data-color="white">👚</div>
+      <div class="item white" draggable="true" data-color="white">🧦</div>
+    `;
+
+    class LaundryBasket extends HTMLElement {
+      connectedCallback() {
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(basketTemplate.content.cloneNode(true));
+        this.items = this.shadowRoot.querySelectorAll('.item');
+        this.items.forEach(item => {
+          item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', item.dataset.color);
+            item.classList.add('dragging');
+          });
+          item.addEventListener('dragend', () => item.classList.remove('dragging'));
+        });
+      }
+    }
+    customElements.define('app-laundry-basket', LaundryBasket);
+
+    // 3.5 Барабан <app-drum-tank>
+    const drumTemplate = document.createElement('template');
+    drumTemplate.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          width: 150px;
+          height: 150px;
+          border-radius: 50%;
+          background: #2d3748;
+          border: 6px solid #4a5568;
+          box-shadow: inset 0 0 20px rgba(0,0,0,0.5),
+                      0 0 0 4px #b0b8c4,
+                      0 8px 16px rgba(0,0,0,0.2);
+          position: relative;
+          overflow: hidden;
+          transition: border-color 0.3s;
+        }
+        .drum-inner {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          padding: 12px;
+          box-sizing: border-box;
+        }
+        .drum-inner span {
+          font-size: 22px;
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        :host(.spinning) .drum-inner {
+          animation: spin 2s infinite linear;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        .drop-zone {
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: rgba(255,255,255,0.2);
+          font-size: 12px;
+          pointer-events: none;
+        }
+      </style>
+      <div class="drum-inner" id="content"></div>
+      <div class="drop-zone">⟳</div>
+    `;
+
+    class DrumTank extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(drumTemplate.content.cloneNode(true));
+        this.content = this.shadowRoot.getElementById('content');
+        this.parentAppliance = null;
+        this.items = [];
+        this.onStateChange = this.onStateChange.bind(this);
+        this.onDrop = this.onDrop.bind(this);
+        this.onDragOver = this.onDragOver.bind(this);
+      }
+
+      connectedCallback() {
+        this.parentAppliance = this.closest('app-appliance');
+        if (this.parentAppliance) {
+          this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+          // Начальное состояние
+          this.onStateChange({ detail: this.parentAppliance.state });
+        }
+        // Слушаем события перетаскивания
+        this.addEventListener('dragover', this.onDragOver);
+        this.addEventListener('drop', this.onDrop);
+      }
+
+      disconnectedCallback() {
+        if (this.parentAppliance) {
+          this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
+        }
+        this.removeEventListener('dragover', this.onDragOver);
+        this.removeEventListener('drop', this.onDrop);
+      }
+
+      onDragOver(e) {
+        e.preventDefault();
+      }
+
+      onDrop(e) {
+        e.preventDefault();
+        const color = e.dataTransfer.getData('text/plain');
+        if (!color) return;
+        // Проверяем, открыта ли дверца (через состояние прибора)
+        if (this.parentAppliance && this.parentAppliance.state.isDoorOpen === false) {
+          alert('⚠️ Сначала откройте дверцу люка!');
+          return;
+        }
+        // Добавляем вещь
+        this.items.push(color);
+        this.renderItems();
+        // Отправляем событие о загрузке
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: 'laundry-loaded', detail: { items: this.items } },
+          bubbles: true,
+          composed: true
+        }));
+      }
+
+      renderItems() {
+        const icons = { red: '👕', white: '👚' };
+        this.content.innerHTML = this.items.map(c => `<span>${icons[c] || '🧺'}</span>`).join('');
+      }
+
+      onStateChange(e) {
+        const state = e.detail || e;
+        if (state.cycleStatus === 'running') {
+          this.classList.add('spinning');
+        } else {
+          this.classList.remove('spinning');
+        }
+        // Если стирка завершена, можно очистить барабан (опционально)
+        if (state.cycleStatus === 'stopped' && state.power === 'off') {
+          // Не очищаем автоматически, чтобы пользователь мог видеть вещи
+        }
+      }
+    }
+    customElements.define('app-drum-tank', DrumTank);
+
+    // 3.6 Сервисный люк <app-service-hatch>
+    const hatchTemplate = document.createElement('template');
+    hatchTemplate.innerHTML = `
+      <style>
+        :host {
+          display: block;
+          margin-top: 10px;
+          padding: 10px 0 4px 0;
+          border-top: 1px solid rgba(0,0,0,0.05);
+        }
+        .hatch-area {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 8px;
+        }
+        .hatch-door {
+          width: 50px;
+          height: 44px;
+          background: #e8eaf0;
+          border-radius: 6px 6px 0 0;
+          border: 2px solid #cbd5e1;
+          border-bottom: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+          transition: all 0.2s;
+          position: relative;
+        }
+        .hatch-door:hover {
+          background: #dce0e8;
+        }
+        .hatch-door.open {
+          border-radius: 0 0 6px 6px;
+          border-bottom: 2px solid #cbd5e1;
+          border-top: none;
+        }
+        .hatch-content {
+          display: none;
+          background: #1e293b;
+          border-radius: 8px;
+          padding: 8px 12px;
+          color: #f1f5f9;
+          font-size: 12px;
+          gap: 6px;
+          align-items: center;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .hatch-content.visible {
+          display: flex;
+        }
+        .filter-plug {
+          width: 24px;
+          height: 24px;
+          background: #4b5563;
+          border-radius: 50%;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          border: 1px dashed #94a3b8;
+          transition: background 0.2s;
+        }
+        .filter-plug:hover {
+          background: #6b7280;
+        }
+        .coin {
+          font-size: 18px;
+          cursor: pointer;
+          animation: bounce 1s infinite alternate;
+        }
+        @keyframes bounce {
+          0% { transform: scale(1); }
+          100% { transform: scale(1.2); }
+        }
+        .hatch-label {
+          font-size: 10px;
+          color: #94a3b8;
+          margin-right: auto;
+        }
+      </style>
+      <div class="hatch-area">
+        <span class="hatch-label">🔧 фильтр</span>
+        <div class="hatch-content" id="hatchContent">
+          <span>Фильтр</span>
+          <div class="filter-plug" id="filterPlug">⏻</div>
+          <span class="coin" id="coin" style="display:none;">🪙</span>
+        </div>
+        <div class="hatch-door" id="hatchDoor">▽</div>
+      </div>
+    `;
+
+    class ServiceHatch extends HTMLElement {
+      constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this.shadowRoot.appendChild(hatchTemplate.content.cloneNode(true));
+        this.hatchDoor = this.shadowRoot.getElementById('hatchDoor');
+        this.hatchContent = this.shadowRoot.getElementById('hatchContent');
+        this.filterPlug = this.shadowRoot.getElementById('filterPlug');
+        this.coin = this.shadowRoot.getElementById('coin');
+
+        this.isOpen = false;
+        this.isFilterUnscrewed = false;
+        this.isCoinRemoved = false;
+        this.parentAppliance = null;
+        this.onStateChange = this.onStateChange.bind(this);
+      }
+
+      connectedCallback() {
+        this.parentAppliance = this.closest('app-appliance');
+        if (this.parentAppliance) {
+          this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+          // Проверим начальное состояние засора
+          if (this.parentAppliance.state.isClogged) {
+            // Показываем монету только если фильтр выкручен
+          }
+        }
+        this.hatchDoor.addEventListener('click', () => this.toggleHatch());
+        this.filterPlug.addEventListener('click', () => this.unscrewFilter());
+        this.coin.addEventListener('click', () => this.removeCoin());
+      }
+
+      disconnectedCallback() {
+        if (this.parentAppliance) {
+          this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
+        }
+      }
+
+      toggleHatch() {
+        this.isOpen = !this.isOpen;
+        this.hatchDoor.classList.toggle('open', this.isOpen);
+        this.hatchContent.classList.toggle('visible', this.isOpen);
+        if (!this.isOpen) {
+          // Если закрываем, скрываем содержимое
+          this.hatchContent.classList.remove('visible');
+        }
+      }
+
+      unscrewFilter() {
+        if (!this.isOpen) {
+          alert('Сначала откройте люк!');
+          return;
+        }
+        this.isFilterUnscrewed = true;
+        this.filterPlug.textContent = '◉';
+        this.filterPlug.style.background = '#3b4b5c';
+        // Если есть засор, показываем монету
+        if (this.parentAppliance && this.parentAppliance.state.isClogged && !this.isCoinRemoved) {
+          this.coin.style.display = 'inline-block';
+        }
+      }
+
+      removeCoin() {
+        if (!this.isFilterUnscrewed) {
+          alert('Сначала выкрутите фильтр!');
+          return;
+        }
+        this.isCoinRemoved = true;
+        this.coin.style.display = 'none';
+        // Отправляем событие об очистке фильтра
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: 'filter-cleaned', detail: {} },
+          bubbles: true,
+          composed: true
+        }));
+        // Закрываем люк автоматически
+        this.toggleHatch();
+      }
+
+      onStateChange(e) {
+        const state = e.detail;
+        // Если засор сброшен извне, убираем монету
+        if (!state.isClogged) {
+          this.isCoinRemoved = true;
+          this.coin.style.display = 'none';
+        }
+        // Если ошибка активна и это E18, можно подсветить люк
+        if (state.activeError === 'E18') {
+          this.hatchDoor.style.borderColor = '#ef4444';
+        } else {
+          this.hatchDoor.style.borderColor = '#cbd5e1';
+        }
+      }
+    }
+    customElements.define('app-service-hatch', ServiceHatch);
+
+    // ------------------------------------------------------------
+    // 4. ИНИЦИАЛИЗАЦИЯ (добавляем корзину с бельём под прибор)
+    // ------------------------------------------------------------
+    // Добавим корзину динамически, т.к. она не была вставлена в разметку
+    // Вставим её после <app-appliance> в контейнер
+    const container = document.getElementById('app-container');
+    const basket = document.createElement('app-laundry-basket');
+    container.appendChild(basket);
+
+    // Также можем добавить пояснение
+    const footer = document.createElement('p');
+    footer.style.cssText = 'margin-top: 16px; font-size: 0.8rem; color: #64748b; text-align: center;';
+    footer.textContent = 'Перетащите вещи в барабан, выберите режим и нажмите START. Попробуйте режим "Отжим" — возникнет ошибка E18, если фильтр засорён.';
+    container.appendChild(footer);
+
+    console.log('🚀 Приложение загружено. Сценарий с фильтром активен.');
+  </script>
+
+</body>
+</html>
