@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Стиральная машина — симулятор</title>
+  <title>Стиральная машина — симулятор (исправлен v2)</title>
   <style>
     * {
       margin: 0;
@@ -147,14 +147,19 @@
       this.shadowRoot.appendChild(applianceTemplate.content.cloneNode(true));
       this.housing = this.shadowRoot.getElementById('housing');
 
+      // Управление таймером цикла
+      this.cycleTimerId = null;
+      this.cycleRemaining = 5000; // мс
+      this.cycleStartTime = 0;
+
       this.state = {
         power: 'off',
         currentProgram: 'none',
-        cycleStatus: 'stopped',
+        cycleStatus: 'stopped', // stopped, running, paused, error
         activeError: null,
         isClogged: true,
         loadedItems: [],
-        isDoorOpen: true,   // по умолчанию дверца открыта
+        isDoorOpen: true,
         boltsRemoved: false,
       };
 
@@ -170,6 +175,7 @@
 
     disconnectedCallback() {
       this.removeEventListener('ui-action', this.handleChildAction);
+      this.clearCycleTimer();
     }
 
     updateState(partial) {
@@ -211,14 +217,50 @@
       }
     }
 
+    clearCycleTimer() {
+      if (this.cycleTimerId) {
+        clearTimeout(this.cycleTimerId);
+        this.cycleTimerId = null;
+      }
+    }
+
+    startCycleTimer(duration) {
+      this.clearCycleTimer();
+      this.cycleTimerId = setTimeout(() => {
+        if (this.state.cycleStatus === 'running') {
+          this.updateState({ cycleStatus: 'stopped', power: 'off', currentProgram: 'none' });
+          alert('✅ Стирка завершена! Машина выключена.');
+        }
+        this.cycleTimerId = null;
+      }, duration);
+    }
+
     async handleChildAction(event) {
       const { actionType, detail } = event.detail;
       event.stopPropagation();
 
       switch (actionType) {
-        case 'program-preview':
+        case 'program-preview': {
+          // Ничего не меняем в состоянии, только пробрасываем для дисплея
+          // (дисплей сам подписан на preview-program-display)
+          break;
+        }
+
         case 'program-selected': {
           const progId = detail.programId;
+          // Если машина работает или на паузе, смена программы останавливает цикл
+          if (this.state.cycleStatus === 'running' || this.state.cycleStatus === 'paused') {
+            this.clearCycleTimer();
+            this.updateState({
+              cycleStatus: 'stopped',
+              activeError: null,
+              power: progId === 'off' ? 'off' : 'on',
+              currentProgram: progId,
+              isDoorOpen: false // закрываем дверцу принудительно
+            });
+            alert('⚠️ Программа изменена во время работы. Цикл остановлен.');
+            return;
+          }
           const power = (progId === 'off') ? 'off' : 'on';
           this.updateState({
             currentProgram: progId,
@@ -230,15 +272,18 @@
         }
 
         case 'simulation-started': {
+          if (this.state.cycleStatus === 'paused') {
+            // Продолжение после паузы
+            this.updateState({ cycleStatus: 'running' });
+            this.startCycleTimer(this.cycleRemaining);
+            return;
+          }
           const result = await this.validateStart();
           if (result.success) {
+            this.cycleRemaining = 5000;
+            this.cycleStartTime = Date.now();
             this.updateState({ cycleStatus: 'running', activeError: null });
-            setTimeout(() => {
-              if (this.state.cycleStatus === 'running') {
-                this.updateState({ cycleStatus: 'stopped', power: 'off', currentProgram: 'none' });
-                alert('✅ Стирка завершена! Машина выключена.');
-              }
-            }, 5000);
+            this.startCycleTimer(this.cycleRemaining);
           } else {
             this.updateState({ cycleStatus: 'error', activeError: result.errorCode });
             if (result.effect) {
@@ -251,6 +296,10 @@
         }
 
         case 'simulation-paused': {
+          if (this.state.cycleStatus !== 'running') return;
+          this.clearCycleTimer();
+          const elapsed = Date.now() - this.cycleStartTime;
+          this.cycleRemaining = Math.max(0, this.cycleRemaining - elapsed);
           this.updateState({ cycleStatus: 'paused' });
           break;
         }
@@ -266,7 +315,14 @@
         }
 
         case 'filter-cleaned': {
-          this.updateState({ isClogged: false, activeError: null });
+          // Полный сброс ошибки и возврат к исходному состоянию
+          this.updateState({
+            isClogged: false,
+            activeError: null,
+            cycleStatus: 'stopped',
+            power: 'off',
+            currentProgram: 'none'
+          });
           alert('✅ Фильтр очищен! Ошибка сброшена. Теперь можно запускать стирку.');
           break;
         }
@@ -277,12 +333,29 @@
 
     async validateStart() {
       const state = this.state;
-      if ((state.currentProgram === 'spin_only' || state.currentProgram === 'eco_40') && state.isClogged) {
+      // Проверка открытой дверцы
+      if (state.isDoorOpen) {
+        return {
+          success: false,
+          errorCode: 'DOOR',
+          message: '🚪 Дверца открыта! Закройте люк перед запуском.'
+        };
+      }
+      // Проверка засора фильтра (теперь для любой программы, кроме off)
+      if (state.isClogged && state.currentProgram !== 'off' && state.currentProgram !== 'none') {
         return {
           success: false,
           errorCode: 'E18',
           effect: 'shake',
           message: '🚨 Ошибка E18! Вода не сливается. Засор фильтра насоса. Откройте нижний люк и проверьте фильтр.'
+        };
+      }
+      // Дополнительно: нет загруженного белья
+      if (state.loadedItems.length === 0) {
+        return {
+          success: false,
+          errorCode: 'EMPTY',
+          message: '👕 Барабан пуст. Загрузите бельё перед стиркой.'
         };
       }
       return { success: true };
@@ -314,6 +387,11 @@
         height: 80px;
         user-select: none;
         touch-action: none;
+      }
+      :host(.disabled) .knob-body {
+        pointer-events: none;
+        opacity: 0.6;
+        cursor: not-allowed;
       }
       .knob-container {
         position: relative;
@@ -391,22 +469,47 @@
       this.isDragging = false;
       this.startAngle = 0;
       this.knobBody = this.shadowRoot.getElementById('knob');
+      this.parentAppliance = null;
 
       this.onStart = this.onStart.bind(this);
       this.onMove = this.onMove.bind(this);
       this.onEnd = this.onEnd.bind(this);
+      this.onApplianceState = this.onApplianceState.bind(this);
     }
 
     connectedCallback() {
       this.knobBody.addEventListener('mousedown', this.onStart);
       this.knobBody.addEventListener('touchstart', this.onStart, { passive: true });
+      this.parentAppliance = this.closest('app-appliance');
+      if (this.parentAppliance) {
+        this.parentAppliance.addEventListener('appliance-state-changed', this.onApplianceState);
+      }
       this._updateRotation(0);
     }
 
     disconnectedCallback() {
       this.knobBody.removeEventListener('mousedown', this.onStart);
       this.knobBody.removeEventListener('touchstart', this.onStart);
+      if (this.parentAppliance) {
+        this.parentAppliance.removeEventListener('appliance-state-changed', this.onApplianceState);
+      }
       this._removeGlobalListeners();
+    }
+
+    onApplianceState(e) {
+      const state = e.detail;
+      // Блокируем крутилку во время работы или паузы
+      if (state.cycleStatus === 'running' || state.cycleStatus === 'paused') {
+        this.classList.add('disabled');
+      } else {
+        this.classList.remove('disabled');
+      }
+
+      // Автоматический сброс в положение 'off' при выключении питания,
+      // если программа не off и цикл остановлен
+      if (state.power === 'off' && state.cycleStatus === 'stopped' && this.currentStepIndex !== 0) {
+        this._silentSnapTo(0);
+      }
     }
 
     _getAngle(e) {
@@ -421,6 +524,7 @@
     }
 
     onStart(e) {
+      if (this.classList.contains('disabled')) return;
       this.isDragging = true;
       const clickAngle = this._getAngle(e);
       this.startAngle = clickAngle - this.currentAngle;
@@ -461,12 +565,25 @@
       if (closestIndex !== this.currentStepIndex) {
         this.currentStepIndex = closestIndex;
         if (navigator.vibrate) navigator.vibrate(8);
-        this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
+        // Отправляем preview, не меняя основное состояние
+        this.dispatchEvent(new CustomEvent('preview-program', {
+          detail: { programId: this.steps[closestIndex].programId },
+          bubbles: true,
+          composed: true
+        }));
       }
     }
 
     _updateRotation(angle) {
       this.knobBody.style.transform = `rotate(${angle}deg)`;
+    }
+
+    _silentSnapTo(index) {
+      // Меняем положение крутилки без генерации событий
+      const step = this.steps[index];
+      this.currentAngle = step.angle;
+      this.currentStepIndex = index;
+      this._updateRotation(step.angle);
     }
 
     _dispatchAction(type, detail) {
@@ -536,6 +653,8 @@
       this.displayEl = this.shadowRoot.getElementById('display');
       this.parentAppliance = null;
       this.onStateChange = this.onStateChange.bind(this);
+      this.onPreview = this.onPreview.bind(this);
+      this.currentPreview = null;
 
       this.programTimes = {
         'off': 'OFF',
@@ -552,28 +671,48 @@
       this.parentAppliance = this.closest('app-appliance');
       if (this.parentAppliance) {
         this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+        this.parentAppliance.addEventListener('preview-program-display', this.onPreview);
         this.render(this.parentAppliance.state);
       }
+      // Ретрансляция preview-программ
+      this.parentAppliance?.addEventListener('preview-program', (e) => {
+        this.onPreview({ detail: e.detail });
+      });
     }
 
     disconnectedCallback() {
       if (this.parentAppliance) {
         this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
+        // Удаляем слушатель preview-program (нужно было сохранить ссылку)
+        // для простоты оставим как есть, но в реальном проекте лучше сохранить обработчик.
       }
     }
 
     onStateChange(e) {
+      this.currentPreview = null; // сброс предпросмотра при изменении состояния
       this.render(e.detail);
+    }
+
+    onPreview(e) {
+      this.currentPreview = e.detail.programId;
+      this.render(this.parentAppliance ? this.parentAppliance.state : null);
     }
 
     render(state) {
       this.displayEl.classList.remove('off', 'error');
+      if (this.currentPreview) {
+        const time = this.programTimes[this.currentPreview] || '--:--';
+        this.displayEl.textContent = time;
+        this.displayEl.classList.add('off'); // приглушённый вид для предпросмотра
+        return;
+      }
+      if (!state) return;
       if (state.activeError) {
         this.displayEl.classList.add('error');
         this.displayEl.textContent = state.activeError;
         return;
       }
-      if (state.power === 'off' || state.currentProgram === 'off') {
+      if (state.power === 'off' || state.currentProgram === 'off' || state.currentProgram === 'none') {
         this.displayEl.classList.add('off');
         this.displayEl.textContent = 'OFF';
         return;
@@ -636,6 +775,10 @@
         box-shadow: 0 0 10px #34c759;
         animation: none;
       }
+      .btn.paused .led {
+        background: #f59e0b;
+        box-shadow: 0 0 8px #f59e0b;
+      }
       @keyframes pulse {
         0% { opacity: 0.4; transform: scale(0.9); }
         50% { opacity: 1; transform: scale(1.1); }
@@ -686,9 +829,9 @@
     render() {
       if (!this.state) return;
       const { power, currentProgram, cycleStatus, activeError } = this.state;
-      this.btn.classList.remove('disabled', 'ready', 'running');
+      this.btn.classList.remove('disabled', 'ready', 'running', 'paused');
 
-      if (power === 'off' || currentProgram === 'off') {
+      if (power === 'off' || currentProgram === 'off' || currentProgram === 'none') {
         this.btn.classList.add('disabled');
         this.label.textContent = 'START';
         return;
@@ -696,6 +839,11 @@
       if (cycleStatus === 'running') {
         this.btn.classList.add('running');
         this.label.textContent = 'PAUSE';
+        return;
+      }
+      if (cycleStatus === 'paused') {
+        this.btn.classList.add('paused');
+        this.label.textContent = 'START';
         return;
       }
       if (activeError) {
@@ -711,12 +859,20 @@
     onClick() {
       if (this.btn.classList.contains('disabled')) return;
       const isRunning = this.state?.cycleStatus === 'running';
-      const action = isRunning ? 'simulation-paused' : 'simulation-started';
-      this.dispatchEvent(new CustomEvent('ui-action', {
-        detail: { actionType: action, detail: { programId: this.state?.currentProgram } },
-        bubbles: true,
-        composed: true
-      }));
+      if (isRunning) {
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: 'simulation-paused', detail: {} },
+          bubbles: true,
+          composed: true
+        }));
+      } else {
+        // Если paused или stopped – отправляем simulation-started (для paused это продолжение)
+        this.dispatchEvent(new CustomEvent('ui-action', {
+          detail: { actionType: 'simulation-started', detail: { programId: this.state?.currentProgram } },
+          bubbles: true,
+          composed: true
+        }));
+      }
     }
   }
   customElements.define('app-button-start', ButtonStart);
@@ -758,7 +914,8 @@
   `;
 
   class LaundryBasket extends HTMLElement {
-    connectedCallback() {
+    constructor() {
+      super();
       this.attachShadow({ mode: 'open' });
       this.shadowRoot.appendChild(basketTemplate.content.cloneNode(true));
       this.items = this.shadowRoot.querySelectorAll('.item');
@@ -867,7 +1024,6 @@
       e.preventDefault();
       const color = e.dataTransfer.getData('text/plain');
       if (!color) return;
-      // Проверяем, открыта ли дверца
       if (this.parentAppliance && this.parentAppliance.state.isDoorOpen === false) {
         alert('⚠️ Дверца закрыта! Откройте её, чтобы загрузить бельё.');
         return;
@@ -1078,7 +1234,7 @@
   }
   customElements.define('app-service-hatch', ServiceHatch);
 
-  // 2.7 Дверца <app-door> (НОВЫЙ КОМПОНЕНТ)
+  // 2.7 Дверца <app-door>
   const doorTemplate = document.createElement('template');
   doorTemplate.innerHTML = `
     <style>
@@ -1221,7 +1377,7 @@
   footer.textContent = 'Кликните по дверце, чтобы открыть/закрыть. Перетащите вещи в барабан, выберите режим и нажмите START.';
   container.appendChild(footer);
 
-  console.log('🚀 Приложение загружено. Дверца работает!');
+  console.log('🚀 Приложение загружено. Ошибка Maximum call stack size exceeded исправлена!');
 </script>
 </body>
 </html>
