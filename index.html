@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Стиральная машина — симулятор (стабильная версия)</title>
+  <title>Стиральная машина — симулятор (исправленная версия)</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -135,10 +135,10 @@
         currentProgram: 'none',
         cycleStatus: 'stopped',
         activeError: null,
-        isClogged: true,
+        isClogged: false, // ИСПРАВЛЕНО: фильтр чист по умолчанию
         loadedItems: [],
         isDoorOpen: true,
-        previewProgram: null,  // для предпросмотра на дисплее
+        previewProgram: null,
       };
 
       this.handleChildAction = this.handleChildAction.bind(this);
@@ -148,7 +148,10 @@
       this.addEventListener('ui-action', this.handleChildAction);
       if (!this.hasAttribute('type')) this.setAttribute('type', 'washer');
       this.updateState({ activeError: null });
-      this.broadcastState();
+      // Задержка для гарантии, что дочерние элементы подписались на события
+      requestAnimationFrame(() => {
+        this.broadcastState();
+      });
     }
 
     disconnectedCallback() {
@@ -219,7 +222,6 @@
 
       switch (actionType) {
         case 'program-preview': {
-          // Просто сохраняем ID для дисплея, не меняя основное состояние
           this.updateState({ previewProgram: detail.programId });
           break;
         }
@@ -301,7 +303,7 @@
             currentProgram: 'none',
             previewProgram: null,
           });
-          alert('✅ Фильтр очищен! Ошибка сброшена. Теперь можно запускать стирку.');
+          alert('✅ Фильтр очищен! Теперь можно запускать стирку.');
           break;
         }
 
@@ -533,7 +535,6 @@
       if (closestIndex !== this.currentStepIndex) {
         this.currentStepIndex = closestIndex;
         if (navigator.vibrate) navigator.vibrate(8);
-        // Отправляем preview через ui-action
         this._dispatchAction('program-preview', { programId: this.steps[closestIndex].programId });
       }
     }
@@ -655,12 +656,10 @@
     onUiAction(e) {
       const { actionType, detail } = e.detail;
       if (actionType === 'program-preview') {
-        // Показываем предпросмотр, но не меняем состояние прибора
         this.displayEl.classList.remove('off', 'error');
         this.displayEl.classList.add('preview');
         const time = this.programTimes[detail.programId] || '--:--';
         this.displayEl.textContent = time;
-        // Через 2 секунды возвращаем текущее состояние, если не было нового preview
         if (this._previewTimeout) clearTimeout(this._previewTimeout);
         this._previewTimeout = setTimeout(() => {
           if (this.parentAppliance) {
@@ -833,7 +832,7 @@
   }
   customElements.define('app-button-start', ButtonStart);
 
-  // 2.4 Корзина с бельём <app-laundry-basket>
+  // 2.4 Корзина с бельём <app-laundry-basket> — ИСПРАВЛЕНО: добавлена поддержка клика и touch
   const basketTemplate = document.createElement('template');
   basketTemplate.innerHTML = `
     <style>
@@ -852,20 +851,22 @@
         align-items:center;
         justify-content:center;
         font-size:24px;
-        cursor:grab;
+        cursor:pointer;
         background:#ffffff;
         box-shadow:4px 4px 8px rgba(160,180,200,0.3), -4px -4px 8px rgba(255,255,255,0.7);
-        transition:transform 0.15s;
+        transition:transform 0.15s, opacity 0.15s;
         user-select:none;
+        -webkit-tap-highlight-color: transparent;
       }
-      .item:active { cursor:grabbing; }
+      .item:active { transform:scale(0.9); }
       .item.red { background:#fca5a5; }
       .item.white { background:#f1f5f9; border:1px solid #d1d5db; }
       .item.dragging { opacity:0.4; }
+      .item.loaded { opacity:0.3; pointer-events:none; }
     </style>
-    <div class="item red" draggable="true" data-color="red">👕</div>
-    <div class="item white" draggable="true" data-color="white">👚</div>
-    <div class="item white" draggable="true" data-color="white">🧦</div>
+    <div class="item red" draggable="true" data-color="red" data-icon="👕">👕</div>
+    <div class="item white" draggable="true" data-color="white" data-icon="👚">👚</div>
+    <div class="item white" draggable="true" data-color="white" data-icon="🧦">🧦</div>
   `;
 
   class LaundryBasket extends HTMLElement {
@@ -874,18 +875,46 @@
       this.attachShadow({ mode: 'open' });
       this.shadowRoot.appendChild(basketTemplate.content.cloneNode(true));
       this.items = this.shadowRoot.querySelectorAll('.item');
+      
+      // Поддержка клика для мобильных устройств
       this.items.forEach(item => {
+        // Клик добавляет вещь в барабан
+        item.addEventListener('click', (e) => {
+          if (item.classList.contains('loaded')) return;
+          this._loadItem(item);
+        });
+
+        // Drag-n-drop для десктопа
         item.addEventListener('dragstart', (e) => {
+          if (item.classList.contains('loaded')) return;
           e.dataTransfer.setData('text/plain', item.dataset.color);
+          e.dataTransfer.setData('application/icon', item.dataset.icon);
           item.classList.add('dragging');
         });
         item.addEventListener('dragend', () => item.classList.remove('dragging'));
       });
     }
+
+    _loadItem(item) {
+      const color = item.dataset.color;
+      const icon = item.dataset.icon;
+      
+      // Отправляем событие для добавления в барабан
+      this.dispatchEvent(new CustomEvent('ui-action', {
+        detail: { 
+          actionType: 'laundry-loaded', 
+          detail: { color, icon } 
+        },
+        bubbles: true,
+        composed: true
+      }));
+      
+      item.classList.add('loaded');
+    }
   }
   customElements.define('app-laundry-basket', LaundryBasket);
 
-  // 2.5 Барабан <app-drum-tank>
+  // 2.5 Барабан <app-drum-tank> — ИСПРАВЛЕНО: улучшена обработка drop и клика
   const drumTemplate = document.createElement('template');
   drumTemplate.innerHTML = `
     <style>
@@ -933,6 +962,10 @@
         font-size:12px;
         pointer-events:none;
       }
+      :host(.drag-over) {
+        border-color:#3b82f6;
+        box-shadow:inset 0 0 20px rgba(59,130,246,0.3), 0 0 0 4px #3b82f6, 0 8px 16px rgba(0,0,0,0.2);
+      }
     </style>
     <div class="drum-inner" id="content"></div>
     <div class="drop-zone">⟳</div>
@@ -949,15 +982,20 @@
       this.onStateChange = this.onStateChange.bind(this);
       this.onDrop = this.onDrop.bind(this);
       this.onDragOver = this.onDragOver.bind(this);
+      this.onDragEnter = this.onDragEnter.bind(this);
+      this.onDragLeave = this.onDragLeave.bind(this);
     }
 
     connectedCallback() {
       this.parentAppliance = this.closest('app-appliance');
       if (this.parentAppliance) {
         this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
+        this.parentAppliance.addEventListener('ui-action', this.onUiAction.bind(this));
         this.onStateChange({ detail: this.parentAppliance.state });
       }
       this.addEventListener('dragover', this.onDragOver);
+      this.addEventListener('dragenter', this.onDragEnter);
+      this.addEventListener('dragleave', this.onDragLeave);
       this.addEventListener('drop', this.onDrop);
     }
 
@@ -966,33 +1004,69 @@
         this.parentAppliance.removeEventListener('appliance-state-changed', this.onStateChange);
       }
       this.removeEventListener('dragover', this.onDragOver);
+      this.removeEventListener('dragleave', this.onDragLeave);
       this.removeEventListener('drop', this.onDrop);
+    }
+
+    onUiAction(e) {
+      const { actionType, detail } = e.detail;
+      if (actionType === 'laundry-loaded' && detail.color) {
+        // Обработка клика из корзины
+        if (this.parentAppliance && this.parentAppliance.state.isDoorOpen === false) {
+          alert('⚠️ Дверца закрыта! Откройте её, чтобы загрузить бельё.');
+          return;
+        }
+        this.items.push({ color: detail.color, icon: detail.icon });
+        this.renderItems();
+        this._notifyParent();
+      }
     }
 
     onDragOver(e) {
       e.preventDefault();
     }
 
+    onDragEnter(e) {
+      e.preventDefault();
+      this.classList.add('drag-over');
+    }
+
+    onDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
     onDrop(e) {
       e.preventDefault();
+      this.classList.remove('drag-over');
+      
       const color = e.dataTransfer.getData('text/plain');
+      const icon = e.dataTransfer.getData('application/icon') || '🧺';
+      
       if (!color) return;
+      
       if (this.parentAppliance && this.parentAppliance.state.isDoorOpen === false) {
         alert('⚠️ Дверца закрыта! Откройте её, чтобы загрузить бельё.');
         return;
       }
-      this.items.push(color);
+      
+      this.items.push({ color, icon });
       this.renderItems();
+      this._notifyParent();
+    }
+
+    _notifyParent() {
       this.dispatchEvent(new CustomEvent('ui-action', {
-        detail: { actionType: 'laundry-loaded', detail: { items: this.items } },
+        detail: { 
+          actionType: 'laundry-loaded', 
+          detail: { items: this.items.map(i => i.color) } 
+        },
         bubbles: true,
         composed: true
       }));
     }
 
     renderItems() {
-      const icons = { red: '👕', white: '👚' };
-      this.content.innerHTML = this.items.map(c => `<span>${icons[c] || '🧺'}</span>`).join('');
+      this.content.innerHTML = this.items.map(item => `<span>${item.icon}</span>`).join('');
     }
 
     onStateChange(e) {
@@ -1181,7 +1255,7 @@
   }
   customElements.define('app-service-hatch', ServiceHatch);
 
-  // 2.7 Дверца <app-door>
+  // 2.7 Дверца <app-door> — ИСПРАВЛЕНО: убран pointer-events:none, улучшена визуализация
   const doorTemplate = document.createElement('template');
   doorTemplate.innerHTML = `
     <style>
@@ -1204,12 +1278,16 @@
         z-index:10;
         backdrop-filter:blur(2px);
         user-select:none;
+        -webkit-tap-highlight-color: transparent;
       }
       :host(.open) {
-        transform:translate(-50%, -50%) scale(0.8);
-        opacity:0.3;
-        pointer-events:none;
+        transform:translate(-120%, -50%) scale(0.9) rotate(-15deg);
+        opacity:0.6;
         border-color:#8fa8b8;
+        background:rgba(200,225,240,0.2);
+      }
+      :host(.open) .handle {
+        opacity:0.5;
       }
       .handle {
         width:18px;
@@ -1222,6 +1300,7 @@
         top:50%;
         transform:translateY(-50%);
         border:1px solid #7d8d9e;
+        transition:opacity 0.3s;
       }
       .glass {
         width:80%;
@@ -1243,10 +1322,18 @@
         border-color:#ef4444;
         cursor:not-allowed;
       }
+      .status-indicator {
+        position:absolute;
+        top:10px;
+        left:10px;
+        font-size:12px;
+        opacity:0.7;
+      }
     </style>
     <div class="glass"></div>
     <div class="handle"></div>
     <div class="lock-icon">🔒</div>
+    <div class="status-indicator" id="statusIndicator">🔓</div>
   `;
 
   class AppDoor extends HTMLElement {
@@ -1257,6 +1344,7 @@
       this.parentAppliance = null;
       this.isOpen = true;
       this.isLocked = false;
+      this.statusIndicator = this.shadowRoot.getElementById('statusIndicator');
       this.onStateChange = this.onStateChange.bind(this);
     }
 
@@ -1264,11 +1352,14 @@
       this.parentAppliance = this.closest('app-appliance');
       if (this.parentAppliance) {
         this.parentAppliance.addEventListener('appliance-state-changed', this.onStateChange);
-        const state = this.parentAppliance.state;
-        if (state) {
-          this.isOpen = state.isDoorOpen;
-          this.updateVisual();
-        }
+        // Получаем начальное состояние с задержкой
+        requestAnimationFrame(() => {
+          const state = this.parentAppliance.state;
+          if (state) {
+            this.isOpen = state.isDoorOpen;
+            this.updateVisual();
+          }
+        });
       }
       this.addEventListener('click', this.onClick.bind(this));
     }
@@ -1306,6 +1397,7 @@
     updateVisual() {
       this.classList.toggle('open', this.isOpen);
       this.classList.toggle('locked', this.isLocked);
+      this.statusIndicator.textContent = this.isOpen ? '🔓' : '🔒';
     }
   }
   customElements.define('app-door', AppDoor);
@@ -1318,11 +1410,11 @@
   container.appendChild(basket);
 
   const footer = document.createElement('p');
-  footer.style.cssText = 'margin-top:16px; font-size:0.8rem; color:#64748b; text-align:center;';
-  footer.textContent = 'Кликните по дверце, чтобы открыть/закрыть. Перетащите вещи в барабан, выберите режим и нажмите START.';
+  footer.style.cssText = 'margin-top:16px; font-size:0.8rem; color:#64748b; text-align:center; line-height:1.5;';
+  footer.innerHTML = '💡 <b>Как пользоваться:</b><br>1. Кликните по дверце, чтобы открыть/закрыть<br>2. Кликните по вещам ниже для загрузки в барабан<br>3. Поверните ручку для выбора программы<br>4. Нажмите START';
   container.appendChild(footer);
 
-  console.log('🚀 Приложение загружено. Стабильная версия без рекурсий.');
+  console.log('🚀 Приложение загружено. Исправленная версия с поддержкой тачскрина.');
 </script>
 </body>
 </html>
